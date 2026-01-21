@@ -1,0 +1,158 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import { prisma } from '@/lib/db/prisma';
+
+// GET /api/saved - Get user's saved bills
+export async function GET() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const savedBills = await prisma.savedBill.findMany({
+      where: { userId: session.user.id },
+      include: {
+        bill: {
+          select: {
+            id: true,
+            billId: true,
+            billType: true,
+            billNumber: true,
+            description: true,
+            status: true,
+            lastAction: true,
+            lastActionDate: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return NextResponse.json({ savedBills });
+  } catch (error) {
+    console.error('Error fetching saved bills:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// POST /api/saved - Save a bill
+export async function POST(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { billId, notes } = await request.json();
+
+    if (!billId) {
+      return NextResponse.json(
+        { error: 'Bill ID required' },
+        { status: 400 }
+      );
+    }
+
+    // Find the bill
+    const bill = await prisma.bill.findUnique({
+      where: { billId },
+      select: { id: true },
+    });
+
+    if (!bill) {
+      return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
+    }
+
+    // Check if already saved
+    const existing = await prisma.savedBill.findUnique({
+      where: {
+        userId_billId: {
+          userId: session.user.id,
+          billId: bill.id,
+        },
+      },
+    });
+
+    if (existing) {
+      return NextResponse.json(
+        { error: 'Bill already saved' },
+        { status: 409 }
+      );
+    }
+
+    // Save the bill
+    const savedBill = await prisma.savedBill.create({
+      data: {
+        userId: session.user.id,
+        billId: bill.id,
+        notes: notes || null,
+      },
+      include: {
+        bill: {
+          select: {
+            billId: true,
+            description: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json({ savedBill }, { status: 201 });
+  } catch (error) {
+    console.error('Error saving bill:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/saved - Remove a saved bill
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { billId } = await request.json();
+
+    if (!billId) {
+      return NextResponse.json(
+        { error: 'Bill ID required' },
+        { status: 400 }
+      );
+    }
+
+    // Find the bill
+    const bill = await prisma.bill.findUnique({
+      where: { billId },
+      select: { id: true },
+    });
+
+    if (!bill) {
+      return NextResponse.json({ error: 'Bill not found' }, { status: 404 });
+    }
+
+    // Delete the saved bill
+    await prisma.savedBill.delete({
+      where: {
+        userId_billId: {
+          userId: session.user.id,
+          billId: bill.id,
+        },
+      },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error removing saved bill:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}

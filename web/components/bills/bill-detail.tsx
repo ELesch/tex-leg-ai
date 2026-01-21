@@ -1,0 +1,293 @@
+'use client';
+
+import { useState } from 'react';
+import { useSession } from 'next-auth/react';
+import Link from 'next/link';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import {
+  ChevronLeft,
+  Bookmark,
+  Share2,
+  FileText,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  Users,
+} from 'lucide-react';
+import { formatDate, getBillTypeLabel } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { AddToTeamDialog } from '@/components/teams/add-to-team-dialog';
+import { BillProgress } from '@/components/bills/bill-progress';
+
+interface BillDetailProps {
+  bill: {
+    id: string;
+    billId: string;
+    billType: string;
+    billNumber: number;
+    description: string;
+    content?: string | null;
+    status?: string | null;
+    authors: string[];
+    subjects: string[];
+    lastAction?: string | null;
+    lastActionDate?: Date | null;
+    session: {
+      code: string;
+      name: string;
+    };
+  };
+}
+
+export function BillDetail({ bill }: BillDetailProps) {
+  const { data: session } = useSession();
+  const { toast } = useToast();
+  const [showFullContent, setShowFullContent] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!session) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please sign in to save bills',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const response = await fetch('/api/saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ billId: bill.billId }),
+      });
+
+      if (response.ok) {
+        toast({
+          title: 'Bill saved',
+          description: `${bill.billId} has been added to your saved bills`,
+        });
+      } else {
+        throw new Error('Failed to save');
+      }
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to save bill. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({
+        title: 'Link copied',
+        description: 'Bill link has been copied to clipboard',
+      });
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to copy link',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Back navigation */}
+      <Link
+        href="/bills"
+        className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ChevronLeft className="mr-1 h-4 w-4" />
+        Back to Bills
+      </Link>
+
+      {/* Header */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div className="flex items-center gap-3">
+            <Badge
+              variant={bill.billType === 'HB' ? 'hb' : 'sb'}
+              className="text-sm"
+            >
+              {bill.billType}
+            </Badge>
+            <h1 className="text-3xl font-bold">{bill.billId}</h1>
+          </div>
+          <p className="mt-2 text-muted-foreground">
+            {getBillTypeLabel(bill.billType)} | {bill.session.name}
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleSave} disabled={isSaving}>
+            <Bookmark className="mr-2 h-4 w-4" />
+            {isSaving ? 'Saving...' : 'Save'}
+          </Button>
+          {session && (
+            <AddToTeamDialog
+              billId={bill.billId}
+              billDescription={bill.description}
+              trigger={
+                <Button variant="outline" size="sm">
+                  <Users className="mr-2 h-4 w-4" />
+                  Add to Team
+                </Button>
+              }
+            />
+          )}
+          <Button variant="outline" size="sm" onClick={handleShare}>
+            <Share2 className="mr-2 h-4 w-4" />
+            Share
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <a
+              href={`https://capitol.texas.gov/BillLookup/History.aspx?LegSess=${bill.session.code}&Bill=${bill.billId.replace(' ', '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Capitol.gov
+            </a>
+          </Button>
+        </div>
+      </div>
+
+      {/* Progress indicator */}
+      <Card>
+        <CardContent className="pt-6">
+          <BillProgress status={bill.status} billType={bill.billType} />
+        </CardContent>
+      </Card>
+
+      {/* Metadata */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Last Action
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-lg font-semibold">
+              {bill.lastAction || 'No action recorded'}
+            </p>
+            {bill.lastActionDate && (
+              <p className="text-sm text-muted-foreground">
+                {formatDate(bill.lastActionDate)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Authors
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-lg font-semibold">
+              {bill.authors.length > 0 ? bill.authors.join(', ') : 'Not listed'}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Subjects */}
+      {bill.subjects.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Subjects
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {bill.subjects.map((subject, i) => (
+                <Badge key={i} variant="secondary">
+                  {subject}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Description */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Description
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed">
+            {bill.description}
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Full content */}
+      {bill.content && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Full Bill Text
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowFullContent(!showFullContent)}
+              >
+                {showFullContent ? (
+                  <>
+                    <ChevronUp className="mr-1 h-4 w-4" />
+                    Collapse
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="mr-1 h-4 w-4" />
+                    Expand
+                  </>
+                )}
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {showFullContent ? (
+              <div className="max-h-[600px] overflow-y-auto rounded-md bg-muted p-4">
+                <pre className="whitespace-pre-wrap font-mono text-sm">
+                  {bill.content}
+                </pre>
+              </div>
+            ) : (
+              <div className="relative">
+                <div className="max-h-32 overflow-hidden rounded-md bg-muted p-4">
+                  <pre className="whitespace-pre-wrap font-mono text-sm">
+                    {bill.content}
+                  </pre>
+                </div>
+                <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-background to-transparent" />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
