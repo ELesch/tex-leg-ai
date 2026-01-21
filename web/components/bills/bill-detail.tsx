@@ -165,27 +165,34 @@ export function BillDetail({ bill }: BillDetailProps) {
         </div>
       </div>
 
-      {/* Bill Info - Collapsible panel combining Status, Last Action, Authors */}
+      {/* Bill Info - Collapsible panel combining Status, Authors, Description */}
       <Card>
         <CardHeader
           className="cursor-pointer select-none"
           onClick={() => setShowBillInfo(!showBillInfo)}
         >
           <CardTitle className="flex items-center justify-between">
-            <div className="flex flex-1 items-center gap-4 text-sm font-normal">
-              <span>
-                <span className="font-medium">Status:</span>{' '}
-                <span className="text-muted-foreground">{bill.status || 'Unknown'}</span>
-              </span>
-              <Separator orientation="vertical" className="h-4" />
-              <span>
-                <span className="font-medium">Authors:</span>{' '}
-                <span className="text-muted-foreground">
-                  {bill.authors.length > 0 ? bill.authors.join(', ') : 'Not listed'}
+            <div className="flex flex-1 flex-col gap-1 text-sm font-normal">
+              <div className="flex items-center gap-4">
+                <span>
+                  <span className="font-medium">Status:</span>{' '}
+                  <span className="text-muted-foreground">{bill.status || 'Unknown'}</span>
                 </span>
-              </span>
+                <Separator orientation="vertical" className="h-4" />
+                <span>
+                  <span className="font-medium">Authors:</span>{' '}
+                  <span className="text-muted-foreground">
+                    {bill.authors.length > 0 ? bill.authors.join(', ') : 'Not listed'}
+                  </span>
+                </span>
+              </div>
+              {!showBillInfo && (
+                <p className="line-clamp-1 text-muted-foreground">
+                  {bill.description}
+                </p>
+              )}
             </div>
-            <Button variant="ghost" size="sm" className="ml-2">
+            <Button variant="ghost" size="sm" className="ml-2 shrink-0">
               {showBillInfo ? (
                 <>
                   <ChevronUp className="mr-1 h-4 w-4" />
@@ -202,6 +209,16 @@ export function BillDetail({ bill }: BillDetailProps) {
         </CardHeader>
         {showBillInfo && (
           <CardContent className="space-y-6">
+            {/* Description */}
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Description</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">
+                {bill.description}
+              </p>
+            </div>
+
+            <Separator />
+
             {/* Progress indicator */}
             <BillProgress status={bill.status} billType={bill.billType} />
 
@@ -254,21 +271,6 @@ export function BillDetail({ bill }: BillDetailProps) {
           </CardContent>
         </Card>
       )}
-
-      {/* Description */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Description
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">
-            {bill.description}
-          </p>
-        </CardContent>
-      </Card>
 
       {/* Full content */}
       {bill.content && (
