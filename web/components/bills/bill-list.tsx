@@ -1,8 +1,16 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/db/prisma';
-import { BillCard } from './bill-card';
 import { Pagination } from './pagination';
 import { parseSearchQuery } from '@/lib/utils/search-parser';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import type { BillType } from '@/types';
 
 interface BillListProps {
@@ -95,16 +103,46 @@ export async function BillList({ searchParams }: BillListProps) {
         </p>
       </div>
 
-      {/* Bill grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {bills.map((bill) => (
-          <Link key={bill.id} href={`/bills/${bill.billId.replace(' ', '-')}`}>
-            <BillCard bill={{
-              ...bill,
-              lastActionDate: bill.lastActionDate?.toISOString() ?? null,
-            }} />
-          </Link>
-        ))}
+      {/* Bill table */}
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[80px]">Type</TableHead>
+              <TableHead className="w-[100px]">Number</TableHead>
+              <TableHead className="w-[140px]">Status</TableHead>
+              <TableHead>Description</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {bills.map((bill) => (
+              <TableRow key={bill.id} className="cursor-pointer">
+                <TableCell>
+                  <Link href={`/bills/${bill.billId.replace(' ', '-')}`} className="block">
+                    <Badge variant={bill.billType === 'HB' ? 'hb' : 'sb'}>
+                      {bill.billType}
+                    </Badge>
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  <Link href={`/bills/${bill.billId.replace(' ', '-')}`} className="block font-medium">
+                    {bill.billNumber}
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  <Link href={`/bills/${bill.billId.replace(' ', '-')}`} className="block text-sm text-muted-foreground">
+                    {bill.status || 'Unknown'}
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  <Link href={`/bills/${bill.billId.replace(' ', '-')}`} className="block">
+                    <span className="line-clamp-2">{bill.description}</span>
+                  </Link>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
 
       {/* Pagination */}
