@@ -2,6 +2,7 @@
 /*.py
 /*.jsx
 /*.md
+!CLAUDE.md
 /*.csv
 
 # Legacy data directories
