@@ -19,10 +19,30 @@ import { Loader2, User, Lock, Bookmark, Trash2, Bot } from 'lucide-react';
 
 type AIProvider = 'openai' | 'anthropic' | 'google';
 
-const MODELS_BY_PROVIDER: Record<AIProvider, string[]> = {
-  openai: ['GPT-5.2', 'GPT-4.1', 'GPT-4.1 Mini', 'GPT-5', 'GPT-5 Mini'],
-  anthropic: ['Claude Opus 4.5', 'Claude Sonnet 4.5', 'Claude Haiku 4.5'],
-  google: ['Gemini 2.5 Pro', 'Gemini 2.5 Flash', 'Gemini 3 Pro', 'Gemini 3 Flash'],
+interface ModelOption {
+  id: string;
+  label: string;
+}
+
+const MODELS_BY_PROVIDER: Record<AIProvider, ModelOption[]> = {
+  openai: [
+    { id: 'gpt-5-2', label: 'GPT-5.2' },
+    { id: 'gpt-4.1', label: 'GPT-4.1' },
+    { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
+    { id: 'gpt-5', label: 'GPT-5' },
+    { id: 'gpt-5-mini', label: 'GPT-5 Mini' },
+  ],
+  anthropic: [
+    { id: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5' },
+    { id: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5' },
+    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+  ],
+  google: [
+    { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+    { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { id: 'gemini-3-pro-preview', label: 'Gemini 3 Pro' },
+    { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+  ],
 };
 
 export default function SettingsPage() {
@@ -223,7 +243,7 @@ export default function SettingsPage() {
     const newProvider = value as AIProvider;
     setAiProvider(newProvider);
     // Reset model when provider changes
-    setAiModel(MODELS_BY_PROVIDER[newProvider][0]);
+    setAiModel(MODELS_BY_PROVIDER[newProvider][0].id);
   };
 
   const handleSaveAiSettings = async (e: React.FormEvent) => {
@@ -369,8 +389,8 @@ export default function SettingsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {MODELS_BY_PROVIDER[aiProvider].map((model) => (
-                      <SelectItem key={model} value={model}>
-                        {model}
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
