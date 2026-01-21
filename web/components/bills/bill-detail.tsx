@@ -162,6 +162,16 @@ export function BillDetail({ bill }: BillDetailProps) {
               Capitol.gov
             </a>
           </Button>
+          <Button variant="outline" size="sm" asChild>
+            <a
+              href={`https://capitol.texas.gov/BillLookup/Companions.aspx?LegSess=${bill.session.code}&Bill=${bill.billId.replace(' ', '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Companions
+            </a>
+          </Button>
         </div>
       </div>
 
@@ -275,17 +285,16 @@ export function BillDetail({ bill }: BillDetailProps) {
       {/* Full content */}
       {bill.content && (
         <Card>
-          <CardHeader>
+          <CardHeader
+            className="cursor-pointer select-none"
+            onClick={() => setShowFullContent(!showFullContent)}
+          >
             <CardTitle className="flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
                 Full Bill Text
               </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowFullContent(!showFullContent)}
-              >
+              <Button variant="ghost" size="sm" className="ml-2 shrink-0">
                 {showFullContent ? (
                   <>
                     <ChevronUp className="mr-1 h-4 w-4" />

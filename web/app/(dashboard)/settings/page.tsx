@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, User, Lock, Bookmark, Trash2, Bot } from 'lucide-react';
+import { Loader2, User, Lock, Bookmark, Trash2, Bot, CheckCircle2 } from 'lucide-react';
 
 type AIProvider = 'openai' | 'anthropic' | 'google';
 
@@ -64,6 +64,7 @@ export default function SettingsPage() {
   const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
   const [aiModel, setAiModel] = useState('');
   const [aiApiKey, setAiApiKey] = useState('');
+  const [hasExistingApiKey, setHasExistingApiKey] = useState(false);
   const [isLoadingAiSettings, setIsLoadingAiSettings] = useState(true);
   const [isSavingAiSettings, setIsSavingAiSettings] = useState(false);
 
@@ -107,9 +108,7 @@ export default function SettingsPage() {
           if (data.model) {
             setAiModel(data.model);
           }
-          if (data.apiKey) {
-            setAiApiKey(data.apiKey);
-          }
+          setHasExistingApiKey(!!data.hasApiKey);
         }
       } catch (error) {
         console.error('Failed to fetch AI settings:', error);
@@ -257,11 +256,16 @@ export default function SettingsPage() {
         body: JSON.stringify({
           provider: aiProvider,
           model: aiModel,
-          apiKey: aiApiKey,
+          apiKey: aiApiKey || undefined,
         }),
       });
 
       if (res.ok) {
+        const data = await res.json();
+        setHasExistingApiKey(!!data.hasApiKey);
+        if (aiApiKey) {
+          setAiApiKey(''); // Clear the input after saving
+        }
         toast({
           title: 'AI settings saved',
           description: 'Your AI settings have been updated successfully.',
@@ -405,11 +409,18 @@ export default function SettingsPage() {
                   type="password"
                   value={aiApiKey}
                   onChange={(e) => setAiApiKey(e.target.value)}
-                  placeholder="Enter your API key"
+                  placeholder={hasExistingApiKey ? "Enter new key to replace existing" : "Enter your API key"}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Your API key is encrypted and stored securely
-                </p>
+                {hasExistingApiKey ? (
+                  <p className="flex items-center gap-1 text-xs text-green-600 dark:text-green-500">
+                    <CheckCircle2 className="h-3 w-3" />
+                    API key saved. Leave blank to keep current key.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Your API key is encrypted and stored securely
+                  </p>
+                )}
               </div>
               <Button type="submit" disabled={isSavingAiSettings}>
                 {isSavingAiSettings && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

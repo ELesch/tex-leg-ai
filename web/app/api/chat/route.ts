@@ -150,6 +150,9 @@ async function streamGoogleResponse(
 }
 
 export async function POST(request: NextRequest) {
+  let provider = 'openai';
+  let model = 'unknown';
+
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -253,9 +256,9 @@ Instructions:
     };
 
     // Determine which AI provider to use
-    const provider = user?.aiProvider || 'openai';
+    provider = user?.aiProvider || 'openai';
     const apiKey = user?.aiApiKey || process.env.OPENAI_API_KEY;
-    const model = user?.aiModel || DEFAULT_MODELS[provider as keyof typeof DEFAULT_MODELS] || DEFAULT_MODELS.openai;
+    model = user?.aiModel || DEFAULT_MODELS[provider as keyof typeof DEFAULT_MODELS] || DEFAULT_MODELS.openai;
 
     // If no API key available at all, return error
     if (!apiKey) {
@@ -289,10 +292,14 @@ Instructions:
         // Use Vercel AI SDK for OpenAI (unified interface)
         const aiModel = createOpenAIModel(apiKey, model);
 
+        // GPT-5 models require temperature to be set to 1
+        const isGpt5Model = model.startsWith('gpt-5');
+
         const result = await streamText({
           model: aiModel,
           system: systemPrompt,
           messages,
+          temperature: isGpt5Model ? 1 : undefined,
           onFinish: async ({ text }) => {
             await saveAssistantMessage(text);
           },
@@ -302,7 +309,30 @@ Instructions:
       }
     }
   } catch (error) {
-    console.error('Chat API error:', error);
-    return new Response('Internal server error', { status: 500 });
+    // Log the full error with context
+    console.error('Chat API error:', { error, provider, model });
+
+    // Extract meaningful error message
+    let errorMessage = 'Internal server error';
+
+    if (error instanceof Error) {
+      // Check for common API error patterns
+      if (error.message.includes('401') || error.message.includes('Unauthorized') || error.message.includes('invalid_api_key')) {
+        errorMessage = 'Invalid API key. Please check your API key in settings.';
+      } else if (error.message.includes('429') || error.message.includes('rate limit')) {
+        errorMessage = 'Rate limit exceeded. Please wait a moment and try again.';
+      } else if (error.message.includes('model') || error.message.includes('does not exist') || error.message.includes('not found')) {
+        errorMessage = `Model "${model}" not available for ${provider}. Error: ${error.message.replace(/sk-[a-zA-Z0-9]+/g, 'sk-***')}`;
+      } else if (error.message.includes('insufficient_quota') || error.message.includes('quota')) {
+        errorMessage = 'API quota exceeded. Please check your billing settings with your AI provider.';
+      } else if (error.message.includes('temperature')) {
+        errorMessage = `Temperature configuration error for model "${model}": ${error.message}`;
+      } else {
+        // Include the actual error for debugging (but sanitize sensitive info)
+        errorMessage = `Error with ${provider}/${model}: ${error.message.replace(/sk-[a-zA-Z0-9]+/g, 'sk-***')}`;
+      }
+    }
+
+    return new Response(errorMessage, { status: 500 });
   }
 }
