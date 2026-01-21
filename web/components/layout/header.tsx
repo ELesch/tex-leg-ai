@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { FileText, Menu, User, LogOut, Settings, Bookmark } from 'lucide-react';
+import { ThemeSwitcher } from '@/components/theme-switcher';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -54,6 +55,7 @@ export function Header() {
 
         {/* User Menu */}
         <div className="flex items-center gap-4">
+          <ThemeSwitcher />
           {status === 'loading' ? (
             <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
           ) : session ? (

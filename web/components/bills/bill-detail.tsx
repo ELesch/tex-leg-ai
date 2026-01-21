@@ -46,6 +46,7 @@ export function BillDetail({ bill }: BillDetailProps) {
   const { data: session } = useSession();
   const { toast } = useToast();
   const [showFullContent, setShowFullContent] = useState(false);
+  const [showBillInfo, setShowBillInfo] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
@@ -164,46 +165,75 @@ export function BillDetail({ bill }: BillDetailProps) {
         </div>
       </div>
 
-      {/* Progress indicator */}
+      {/* Bill Info - Collapsible panel combining Status, Last Action, Authors */}
       <Card>
-        <CardContent className="pt-6">
-          <BillProgress status={bill.status} billType={bill.billType} />
-        </CardContent>
+        <CardHeader
+          className="cursor-pointer select-none"
+          onClick={() => setShowBillInfo(!showBillInfo)}
+        >
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex flex-1 items-center gap-4 text-sm font-normal">
+              <span>
+                <span className="font-medium">Status:</span>{' '}
+                <span className="text-muted-foreground">{bill.status || 'Unknown'}</span>
+              </span>
+              <Separator orientation="vertical" className="h-4" />
+              <span>
+                <span className="font-medium">Authors:</span>{' '}
+                <span className="text-muted-foreground">
+                  {bill.authors.length > 0 ? bill.authors.join(', ') : 'Not listed'}
+                </span>
+              </span>
+            </div>
+            <Button variant="ghost" size="sm" className="ml-2">
+              {showBillInfo ? (
+                <>
+                  <ChevronUp className="mr-1 h-4 w-4" />
+                  Collapse
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="mr-1 h-4 w-4" />
+                  Expand
+                </>
+              )}
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        {showBillInfo && (
+          <CardContent className="space-y-6">
+            {/* Progress indicator */}
+            <BillProgress status={bill.status} billType={bill.billType} />
+
+            <Separator />
+
+            {/* Bill details grid */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Authors</p>
+                <p className="mt-1 font-semibold">
+                  {bill.authors.length > 0 ? bill.authors.join(', ') : 'Not listed'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Session</p>
+                <p className="mt-1 font-semibold">{bill.session.name}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Last Action</p>
+                <p className="mt-1 font-semibold">
+                  {bill.lastAction || 'No action recorded'}
+                </p>
+                {bill.lastActionDate && (
+                  <p className="text-sm text-muted-foreground">
+                    {formatDate(bill.lastActionDate)}
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        )}
       </Card>
-
-      {/* Metadata */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Last Action
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg font-semibold">
-              {bill.lastAction || 'No action recorded'}
-            </p>
-            {bill.lastActionDate && (
-              <p className="text-sm text-muted-foreground">
-                {formatDate(bill.lastActionDate)}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Authors
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg font-semibold">
-              {bill.authors.length > 0 ? bill.authors.join(', ') : 'Not listed'}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Subjects */}
       {bill.subjects.length > 0 && (
