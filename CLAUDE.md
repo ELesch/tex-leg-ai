@@ -98,9 +98,84 @@ vercel logs <url>   # View logs
 
 ## Environment Variables (Vercel)
 Required in Vercel project settings:
-- `DATABASE_URL` - PostgreSQL connection string
+- `DATABASE_URL` - PostgreSQL connection string (Supabase)
+- `DIRECT_URL` - Direct Supabase connection (for migrations)
 - `NEXTAUTH_SECRET` - Auth secret
 - `NEXTAUTH_URL` - App URL
 - `ANTHROPIC_API_KEY` - Claude API key
 - `OPENAI_API_KEY` - OpenAI API key (optional)
 - `GOOGLE_API_KEY` - Gemini API key (optional)
+
+## Debugging
+
+### Vercel CLI
+Always run Vercel commands from the `web/` directory.
+
+```bash
+cd web
+
+# List recent deployments and their status
+vercel ls
+
+# Deploy and watch build output (catches build errors)
+vercel --prod
+
+# Inspect a specific deployment
+vercel inspect <deployment-url>
+
+# View runtime logs for a deployment
+vercel logs <deployment-url>
+
+# View real-time logs (streaming)
+vercel logs <deployment-url> --follow
+
+# Check environment variables
+vercel env ls
+
+# Pull environment variables locally
+vercel env pull .env.local
+```
+
+**Common deployment issues:**
+- Build fails with 0ms duration = Usually missing env vars or immediate crash
+- "Dynamic server usage" error = API route using `headers()` during static generation (add `export const dynamic = 'force-dynamic'`)
+- Prisma errors = Run `prisma generate` in build command (already configured in vercel.json)
+
+### Supabase (PostgreSQL Database)
+Database is hosted on Supabase. Use Prisma for all database operations.
+
+```bash
+cd web
+
+# Open Prisma Studio to browse/edit data
+npm run db:studio
+
+# Push schema changes to database (dev)
+npm run db:push
+
+# Create and run migrations (production-safe)
+npm run db:migrate
+
+# Generate Prisma client after schema changes
+npm run db:generate
+
+# Reset database (destructive - dev only)
+npx prisma migrate reset
+```
+
+**Debugging database issues:**
+1. Check connection: Verify `DATABASE_URL` is set correctly in Vercel env vars
+2. Schema sync: Run `npm run db:push` if schema is out of sync
+3. View data: Use `npm run db:studio` to inspect tables
+4. Query logs: Add `log: ['query']` to Prisma client config temporarily
+
+**Supabase Dashboard:**
+- Access via Supabase project dashboard for:
+  - SQL Editor (run raw queries)
+  - Table Editor (view/edit data)
+  - Logs (database connection logs)
+  - Database settings (connection strings, pooling)
+
+**Connection strings:**
+- `DATABASE_URL` - Use pooled connection (port 6543) for app runtime
+- `DIRECT_URL` - Use direct connection (port 5432) for migrations
