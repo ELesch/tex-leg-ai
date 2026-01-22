@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import { useChat } from 'ai/react';
+import { useChat, Message } from 'ai/react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatMessage } from './chat-message';
-import { Send, Loader2, MessageSquare, X, LogIn } from 'lucide-react';
+import { Send, Loader2, MessageSquare, X, LogIn, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -15,20 +15,89 @@ interface ChatPanelProps {
   billId: string;
   billContent?: string;
   className?: string;
+  /** When true, renders as embedded component without floating button behavior */
+  embedded?: boolean;
 }
 
-export function ChatPanel({ billId, className }: ChatPanelProps) {
+export function ChatPanel({ billId, className, embedded = false }: ChatPanelProps) {
   const { data: session, status } = useSession();
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, error } =
+  const { messages, input, handleInputChange, handleSubmit, isLoading, error, setMessages } =
     useChat({
       api: '/api/chat',
       body: { billId },
       id: billId,
     });
+
+  // Fetch chat history on mount when user is authenticated
+  useEffect(() => {
+    async function fetchHistory() {
+      if (!session || (!isExpanded && !embedded)) return;
+
+      setIsLoadingHistory(true);
+      setHistoryError(null);
+
+      try {
+        const response = await fetch(`/api/chat/history?billId=${encodeURIComponent(billId)}`);
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch chat history');
+        }
+
+        const data = await response.json();
+
+        if (data.messages && Array.isArray(data.messages)) {
+          // Convert API format to useChat format
+          const formattedMessages: Message[] = data.messages.map((msg: { id: string; role: string; content: string; createdAt?: string }) => ({
+            id: msg.id,
+            role: msg.role.toLowerCase() as 'user' | 'assistant',
+            content: msg.content,
+            createdAt: msg.createdAt ? new Date(msg.createdAt) : undefined,
+          }));
+
+          setMessages(formattedMessages);
+        }
+      } catch (err) {
+        console.error('Error fetching chat history:', err);
+        setHistoryError(err instanceof Error ? err.message : 'Failed to load chat history');
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    }
+
+    fetchHistory();
+  }, [session, billId, isExpanded, embedded, setMessages]);
+
+  // Clear conversation handler
+  const handleClearConversation = useCallback(async () => {
+    if (isClearing) return;
+
+    setIsClearing(true);
+
+    try {
+      const response = await fetch(`/api/chat/session?billId=${encodeURIComponent(billId)}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to clear conversation');
+      }
+
+      // Reset messages locally
+      setMessages([]);
+    } catch (err) {
+      console.error('Error clearing conversation:', err);
+      // Optionally show error to user
+    } finally {
+      setIsClearing(false);
+    }
+  }, [billId, isClearing, setMessages]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -37,15 +106,15 @@ export function ChatPanel({ billId, className }: ChatPanelProps) {
     }
   }, [messages]);
 
-  // Focus input when expanded
+  // Focus input when expanded or embedded
   useEffect(() => {
-    if (isExpanded && inputRef.current && session) {
+    if ((isExpanded || embedded) && inputRef.current && session) {
       inputRef.current.focus();
     }
-  }, [isExpanded, session]);
+  }, [isExpanded, embedded, session]);
 
-  // Collapsed button
-  if (!isExpanded) {
+  // Collapsed button (only shown in non-embedded mode)
+  if (!embedded && !isExpanded) {
     return (
       <Button
         variant="default"
@@ -62,7 +131,10 @@ export function ChatPanel({ billId, className }: ChatPanelProps) {
   return (
     <div
       className={cn(
-        'fixed bottom-6 right-6 flex h-[600px] w-96 flex-col rounded-lg border bg-background shadow-xl',
+        'flex flex-col rounded-lg border bg-background',
+        embedded
+          ? 'h-full flex-1'
+          : 'fixed bottom-6 right-6 h-[600px] w-96 shadow-xl',
         className
       )}
     >
@@ -72,9 +144,28 @@ export function ChatPanel({ billId, className }: ChatPanelProps) {
           <h3 className="font-semibold">AI Assistant</h3>
           <p className="text-xs text-muted-foreground">Ask about {billId}</p>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setIsExpanded(false)}>
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {session && messages.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleClearConversation}
+              disabled={isClearing}
+              title="Clear conversation"
+            >
+              {isClearing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+          {!embedded && (
+            <Button variant="ghost" size="icon" onClick={() => setIsExpanded(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Auth check */}
@@ -99,7 +190,23 @@ export function ChatPanel({ billId, className }: ChatPanelProps) {
         <>
           {/* Messages */}
           <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-            {messages.length === 0 ? (
+            {isLoadingHistory ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Loader2 className="mb-4 h-8 w-8 animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  Loading conversation history...
+                </p>
+              </div>
+            ) : historyError ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  {historyError}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  You can still start a new conversation
+                </p>
+              </div>
+            ) : messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <MessageSquare className="mb-4 h-12 w-12 text-muted-foreground opacity-50" />
                 <p className="text-sm text-muted-foreground">

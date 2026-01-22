@@ -8,13 +8,6 @@ import { GoogleGenAI } from '@google/genai';
 
 export const maxDuration = 60;
 
-// Type for user AI settings
-interface UserAISettings {
-  aiProvider: string | null;
-  aiModel: string | null;
-  aiApiKey: string | null;
-}
-
 // Default models for each provider
 const DEFAULT_MODELS = {
   openai: 'gpt-4o',
@@ -193,6 +186,16 @@ export async function POST(request: NextRequest) {
       return new Response('Bill not found', { status: 404 });
     }
 
+    // Fetch user's personal notes for this bill
+    const personalNotes = await prisma.personalNote.findMany({
+      where: {
+        userId: session.user.id,
+        billId: bill.id,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10, // Limit to most recent 10 notes to avoid token bloat
+    });
+
     // Get or create chat session
     const chatSession = await prisma.chatSession.upsert({
       where: {
@@ -224,6 +227,12 @@ Bill Description:
 ${bill.description}
 
 ${bill.content ? `Full Bill Text:\n${bill.content.slice(0, 15000)}${bill.content.length > 15000 ? '\n\n[Content truncated for length]' : ''}` : 'Full text not available.'}
+${personalNotes.length > 0 ? `
+
+User's Personal Notes on this Bill:
+${personalNotes.map((n, i) => `${i + 1}. ${n.content}`).join('\n')}
+
+You may reference these notes when answering questions if relevant.` : ''}
 
 Instructions:
 - Answer questions about this bill accurately and helpfully

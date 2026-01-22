@@ -46,6 +46,10 @@ model User {
   workspaceComments WorkspaceComment[]
   teamChatMessages  TeamChatMessage[]
 
+  // Personal annotations and notes
+  personalAnnotations PersonalAnnotation[]
+  personalNotes       PersonalNote[]
+
   @@index([email])
 }
 
@@ -146,6 +150,10 @@ model Bill {
   chatSessions   ChatSession[]
   savedBy        SavedBill[]
   teamWorkspaces TeamWorkspace[]
+
+  // Personal annotations and notes
+  personalAnnotations PersonalAnnotation[]
+  personalNotes       PersonalNote[]
 
   @@unique([sessionId, billType, billNumber])
   @@index([sessionId])
@@ -386,6 +394,12 @@ enum AnnotationType {
   HIGHLIGHT
 }
 
+enum NoteSourceType {
+  MANUAL
+  CHAT
+  TEAM_CHAT
+}
+
 model WorkspaceComment {
   id          String             @id @default(cuid())
   workspaceId String
@@ -452,4 +466,42 @@ enum ActivityType {
   CHAT_MESSAGE
   MEMBER_JOINED
   MEMBER_LEFT
+}
+
+// ============================================
+// Personal Annotations & Notes Models
+// ============================================
+
+model PersonalAnnotation {
+  id           String         @id @default(cuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  billId       String
+  bill         Bill           @relation(fields: [billId], references: [id], onDelete: Cascade)
+  startOffset  Int
+  endOffset    Int
+  selectedText String         @db.Text
+  content      String         @db.Text
+  type         AnnotationType @default(NOTE)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([userId, billId])
+  @@map("personal_annotation")
+}
+
+model PersonalNote {
+  id         String          @id @default(cuid())
+  userId     String
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  billId     String
+  bill       Bill            @relation(fields: [billId], references: [id], onDelete: Cascade)
+  content    String          @db.Text
+  sourceType NoteSourceType?
+  sourceId   String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([userId, billId])
+  @@map("personal_note")
 }

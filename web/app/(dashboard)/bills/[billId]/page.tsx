@@ -1,7 +1,6 @@
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
-import { BillDetail } from '@/components/bills/bill-detail';
-import { ChatPanel } from '@/components/chat/chat-panel';
+import { BillDetailWorkspace } from '@/components/bills/bill-detail-workspace';
 
 interface BillDetailPageProps {
   params: {
@@ -48,10 +47,5 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
     notFound();
   }
 
-  return (
-    <div className="relative">
-      <BillDetail bill={bill} />
-      <ChatPanel billId={bill.billId} billContent={bill.content || undefined} />
-    </div>
-  );
+  return <BillDetailWorkspace bill={bill} />;
 }
