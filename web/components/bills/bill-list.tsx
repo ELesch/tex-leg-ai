@@ -67,9 +67,6 @@ export async function BillList({ searchParams }: BillListProps) {
         billType: true,
         billNumber: true,
         description: true,
-        status: true,
-        lastAction: true,
-        lastActionDate: true,
       },
       orderBy,
       skip,
@@ -110,13 +107,12 @@ export async function BillList({ searchParams }: BillListProps) {
             <TableRow>
               <TableHead className="w-[80px]">Type</TableHead>
               <TableHead className="w-[100px]">Number</TableHead>
-              <TableHead className="w-[140px]">Status</TableHead>
               <TableHead>Description</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {bills.map((bill) => (
-              <TableRow key={bill.id} className="cursor-pointer">
+              <TableRow key={bill.id} className="cursor-pointer hover:bg-muted/50">
                 <TableCell>
                   <Link href={`/bills/${bill.billId.replace(' ', '-')}`} className="block">
                     <Badge variant={bill.billType === 'HB' ? 'hb' : 'sb'}>
@@ -130,13 +126,8 @@ export async function BillList({ searchParams }: BillListProps) {
                   </Link>
                 </TableCell>
                 <TableCell>
-                  <Link href={`/bills/${bill.billId.replace(' ', '-')}`} className="block text-sm text-muted-foreground">
-                    {bill.status || 'Unknown'}
-                  </Link>
-                </TableCell>
-                <TableCell>
                   <Link href={`/bills/${bill.billId.replace(' ', '-')}`} className="block">
-                    <span className="line-clamp-2">{bill.description}</span>
+                    <span className="line-clamp-2 text-muted-foreground">{bill.description}</span>
                   </Link>
                 </TableCell>
               </TableRow>
