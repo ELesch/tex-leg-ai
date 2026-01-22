@@ -50,6 +50,11 @@ model User {
   personalAnnotations PersonalAnnotation[]
   personalNotes       PersonalNote[]
 
+  // Contacts management relations
+  contacts        Contact[]
+  userContacts    UserContact[]
+  contactNotes    ContactNote[]
+
   @@index([email])
 }
 
@@ -376,10 +381,11 @@ model Team {
   aiModel    String? // Model ID
   aiApiKey   String? @db.Text // Team's shared API key
 
-  memberships TeamMembership[]
-  workspaces  TeamWorkspace[]
-  invitations TeamInvitation[]
-  activities  TeamActivity[]
+  memberships    TeamMembership[]
+  workspaces     TeamWorkspace[]
+  invitations    TeamInvitation[]
+  activities     TeamActivity[]
+  sharedContacts SharedContact[]
 
   @@index([slug])
   @@map("team")
@@ -600,4 +606,170 @@ model PersonalNote {
 
   @@index([userId, billId])
   @@map("personal_note")
+}
+
+// ============================================
+// Contacts Management Models
+// ============================================
+
+// Normalized Author entity - represents legislators
+model Author {
+  id            String   @id @default(cuid())
+  name          String   @unique // Canonical name matching Bill.authors
+  displayName   String? // Friendly display name
+  chamber       Chamber?
+  district      String?
+  party         String?
+
+  // Contact info
+  email         String?
+  phone         String?
+  officeAddress String?  @db.Text
+  capitolOffice String?
+  websiteUrl    String?
+  photoUrl      String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  staffPositions StaffPosition[]
+  userContacts   UserContact[]
+
+  @@index([name])
+  @@map("author")
+}
+
+enum Chamber {
+  HOUSE
+  SENATE
+}
+
+// User's personal contact
+model Contact {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  firstName    String
+  lastName     String
+  displayName  String?
+
+  email        String?
+  phone        String?
+  mobilePhone  String?
+  address      String?  @db.Text
+  title        String?
+  organization String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  staffPositions StaffPosition[]
+  notes          ContactNote[]
+  sharedWith     SharedContact[]
+
+  @@index([userId])
+  @@index([lastName, firstName])
+  @@map("contact")
+}
+
+// Links a contact to an author with a staff position
+model StaffPosition {
+  id             String    @id @default(cuid())
+  contactId      String
+  contact        Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  authorId       String
+  author         Author    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  position       StaffRole
+  customPosition String? // For OTHER position type
+  isPrimary      Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  startDate      DateTime?
+  endDate        DateTime?
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([contactId, authorId, position])
+  @@index([authorId])
+  @@index([contactId])
+  @@map("staff_position")
+}
+
+enum StaffRole {
+  CHIEF_OF_STAFF
+  LEGISLATIVE_DIRECTOR
+  COMMUNICATIONS_DIRECTOR
+  DISTRICT_DIRECTOR
+  POLICY_ADVISOR
+  COMMITTEE_CLERK
+  SCHEDULER
+  LEGISLATIVE_AIDE
+  ADMINISTRATIVE_ASSISTANT
+  INTERN
+  OTHER
+}
+
+// User's personal link to an author (for notes and personal contact info)
+model UserContact {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        Author   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  // User's personal notes/additions
+  personalEmail String?
+  personalPhone String?
+  personalNotes String?  @db.Text
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  notes         ContactNote[]
+
+  @@unique([userId, authorId])
+  @@index([userId])
+  @@index([authorId])
+  @@map("user_contact")
+}
+
+// Notes with @-mention support
+model ContactNote {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Attached to either Contact or UserContact
+  contactId     String?
+  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  userContactId String?
+  userContact   UserContact? @relation(fields: [userContactId], references: [id], onDelete: Cascade)
+
+  content       String       @db.Text
+  mentions      Json? // [{type, id, displayText}]
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([contactId])
+  @@index([userContactId])
+  @@map("contact_note")
+}
+
+// Sharing contacts with teams
+model SharedContact {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sharedBy  String
+  sharedAt  DateTime @default(now())
+
+  @@unique([contactId, teamId])
+  @@index([teamId])
+  @@map("shared_contact")
 }
