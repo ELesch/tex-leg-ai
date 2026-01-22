@@ -87,6 +87,32 @@ vercel ls           # List deployments
 vercel logs <url>   # View logs
 ```
 
+### Post-Deployment Verification
+**IMPORTANT:** After every deployment, always verify it succeeded:
+
+1. **Check deployment status:**
+   ```bash
+   cd web && vercel ls
+   ```
+   Look for `● Ready` status on the latest deployment. `● Error` means it failed.
+
+2. **Check build timestamp:**
+   Visit https://web-pcl-bonding.vercel.app/api/health to see the build timestamp.
+   Verify it matches when you deployed.
+
+3. **If deployment shows Error:**
+   ```bash
+   # Use --prod to deploy manually and see full build output
+   cd web && vercel --prod
+   ```
+   This shows the complete build log including any errors.
+
+4. **Check runtime logs after deployment:**
+   ```bash
+   vercel logs <deployment-url> --follow
+   ```
+   Watch for any runtime errors when testing the deployed app.
+
 ## Key Files
 - `web/components/bills/bill-detail.tsx` - Bill detail page with collapsible info panel
 - `web/components/layout/header.tsx` - Main header with navigation and theme toggle
