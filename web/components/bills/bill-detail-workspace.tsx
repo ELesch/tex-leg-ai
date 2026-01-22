@@ -22,6 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AddToTeamDialog } from '@/components/teams/add-to-team-dialog';
 import { BillProgress } from '@/components/bills/bill-progress';
 import { BillWorkspaceLayout } from '@/components/bills/bill-workspace-layout';
+import { AuthorLinks } from '@/components/bills/author-link';
 import { ChatPanel } from '@/components/chat/chat-panel';
 import { PersonalNotesPanel } from '@/components/bills/personal-notes-panel';
 
@@ -200,9 +201,7 @@ export function BillDetailWorkspace({ bill }: BillDetailWorkspaceProps) {
                 <Separator orientation="vertical" className="h-4" />
                 <span>
                   <span className="font-medium">Authors:</span>{' '}
-                  <span className="text-muted-foreground">
-                    {bill.authors.length > 0 ? bill.authors.join(', ') : 'Not listed'}
-                  </span>
+                  <AuthorLinks authors={bill.authors} className="text-muted-foreground" />
                 </span>
               </div>
               {!showBillInfo && (
@@ -248,7 +247,7 @@ export function BillDetailWorkspace({ bill }: BillDetailWorkspaceProps) {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Authors</p>
                 <p className="mt-1 font-semibold">
-                  {bill.authors.length > 0 ? bill.authors.join(', ') : 'Not listed'}
+                  <AuthorLinks authors={bill.authors} />
                 </p>
               </div>
               <div>

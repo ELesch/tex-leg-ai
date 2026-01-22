@@ -12,6 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { BillType } from '@/types';
+import { AuthorLink } from '@/components/bills/author-link';
 
 interface BillListProps {
   searchParams: {
@@ -67,6 +68,7 @@ export async function BillList({ searchParams }: BillListProps) {
         billType: true,
         billNumber: true,
         description: true,
+        authors: true,
       },
       orderBy,
       skip,
@@ -107,6 +109,7 @@ export async function BillList({ searchParams }: BillListProps) {
             <TableRow>
               <TableHead className="w-[80px]">Type</TableHead>
               <TableHead className="w-[100px]">Number</TableHead>
+              <TableHead className="hidden w-[200px] md:table-cell">Author</TableHead>
               <TableHead>Description</TableHead>
             </TableRow>
           </TableHeader>
@@ -124,6 +127,18 @@ export async function BillList({ searchParams }: BillListProps) {
                   <Link href={`/bills/${bill.billId.replace(' ', '-')}`} className="block font-medium">
                     {bill.billNumber}
                   </Link>
+                </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  {bill.authors.length > 0 ? (
+                    <AuthorLink name={bill.authors[0]} className="text-sm" />
+                  ) : (
+                    <span className="text-sm text-muted-foreground">-</span>
+                  )}
+                  {bill.authors.length > 1 && (
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      +{bill.authors.length - 1}
+                    </span>
+                  )}
                 </TableCell>
                 <TableCell>
                   <Link href={`/bills/${bill.billId.replace(' ', '-')}`} className="block">
