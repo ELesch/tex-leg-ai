@@ -11,7 +11,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { MessageSquare, StickyNote, Users, PanelRightOpen } from 'lucide-react';
+import { MessageSquare, StickyNote, Users, PanelRightOpen, List } from 'lucide-react';
+import { ArticleNavigationPlaceholder } from './article-navigation-panel';
 
 interface BillWorkspaceLayoutProps {
   billHeader: React.ReactNode;
@@ -19,6 +20,7 @@ interface BillWorkspaceLayoutProps {
   chatPanel: React.ReactNode;
   notesPanel?: React.ReactNode;
   teamPanel?: React.ReactNode;
+  articlesPanel?: React.ReactNode;
 }
 
 export function BillWorkspaceLayout({
@@ -27,7 +29,10 @@ export function BillWorkspaceLayout({
   chatPanel,
   notesPanel,
   teamPanel,
+  articlesPanel,
 }: BillWorkspaceLayoutProps) {
+  // Determine if structure tab should be shown
+  const showStructureTab = articlesPanel !== undefined;
   const [activeTab, setActiveTab] = useState('chat');
   const [mobileDialogOpen, setMobileDialogOpen] = useState(false);
 
@@ -55,11 +60,17 @@ export function BillWorkspaceLayout({
             className="flex h-full flex-col"
           >
             <div className="shrink-0 border-b bg-background px-4 pt-4">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className={`grid w-full ${showStructureTab ? 'grid-cols-4' : 'grid-cols-3'}`}>
                 <TabsTrigger value="chat" className="gap-2">
                   <MessageSquare className="h-4 w-4" />
                   <span className="hidden xl:inline">AI Chat</span>
                 </TabsTrigger>
+                {showStructureTab && (
+                  <TabsTrigger value="structure" className="gap-2">
+                    <List className="h-4 w-4" />
+                    <span className="hidden xl:inline">Structure</span>
+                  </TabsTrigger>
+                )}
                 <TabsTrigger value="notes" className="gap-2">
                   <StickyNote className="h-4 w-4" />
                   <span className="hidden xl:inline">Notes</span>
@@ -77,6 +88,17 @@ export function BillWorkspaceLayout({
             >
               <div className="flex h-full flex-col">{chatPanel}</div>
             </TabsContent>
+
+            {showStructureTab && (
+              <TabsContent
+                value="structure"
+                className="mt-0 flex-1 overflow-hidden data-[state=inactive]:hidden"
+              >
+                <div className="flex h-full flex-col">
+                  {articlesPanel || <ArticleNavigationPlaceholder />}
+                </div>
+              </TabsContent>
+            )}
 
             <TabsContent
               value="notes"
@@ -122,11 +144,17 @@ export function BillWorkspaceLayout({
               className="flex h-full flex-col"
             >
               <div className="shrink-0 border-b px-4 pt-4">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className={`grid w-full ${showStructureTab ? 'grid-cols-4' : 'grid-cols-3'}`}>
                   <TabsTrigger value="chat" className="gap-2">
                     <MessageSquare className="h-4 w-4" />
                     AI Chat
                   </TabsTrigger>
+                  {showStructureTab && (
+                    <TabsTrigger value="structure" className="gap-2">
+                      <List className="h-4 w-4" />
+                      Structure
+                    </TabsTrigger>
+                  )}
                   <TabsTrigger value="notes" className="gap-2">
                     <StickyNote className="h-4 w-4" />
                     Notes
@@ -144,6 +172,17 @@ export function BillWorkspaceLayout({
               >
                 <div className="flex h-full flex-col">{chatPanel}</div>
               </TabsContent>
+
+              {showStructureTab && (
+                <TabsContent
+                  value="structure"
+                  className="mt-0 flex-1 overflow-hidden data-[state=inactive]:hidden"
+                >
+                  <div className="flex h-full flex-col">
+                    {articlesPanel || <ArticleNavigationPlaceholder />}
+                  </div>
+                </TabsContent>
+              )}
 
               <TabsContent
                 value="notes"

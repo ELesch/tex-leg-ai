@@ -142,6 +142,14 @@ model Bill {
   lastAction     String?
   lastActionDate DateTime?
 
+  // Bill structure & complexity analysis
+  isPdfOnly     Boolean         @default(false) // true if bill text is only available as PDF
+  articleCount  Int? // number of ARTICLE sections in the bill
+  sectionCount  Int? // number of SECTION entries in the bill
+  affectedCodes String[] // list of Texas Codes modified (e.g., ["Education Code", "Government Code"])
+  complexity    BillComplexity? // categorization: simple, moderate, complex, omnibus
+  billPattern   BillPattern? // detected pattern: terminology_replacement, omnibus, single_code, null
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -155,11 +163,19 @@ model Bill {
   personalAnnotations PersonalAnnotation[]
   personalNotes       PersonalNote[]
 
+  // Bill structure relations
+  articles                BillArticle[]
+  codeReferences          BillCodeReference[]
+  terminologyReplacements TerminologyReplacement[]
+
   @@unique([sessionId, billType, billNumber])
   @@index([sessionId])
   @@index([billType])
   @@index([billNumber])
   @@index([billId])
+  @@index([complexity])
+  @@index([billPattern])
+  @@index([isPdfOnly])
 }
 
 enum BillType {
@@ -169,6 +185,86 @@ enum BillType {
   SJR // Senate Joint Resolution
   HCR // House Concurrent Resolution
   SCR // Senate Concurrent Resolution
+}
+
+enum BillComplexity {
+  SIMPLE // Single section, straightforward changes
+  MODERATE // Multiple sections, single code
+  COMPLEX // Multiple codes, significant changes
+  OMNIBUS // Multiple articles, extensive changes across codes
+}
+
+enum BillPattern {
+  TERMINOLOGY_REPLACEMENT // Bill primarily replaces terms throughout code
+  OMNIBUS // Bill contains multiple articles covering different topics
+  SINGLE_CODE // Bill modifies a single Texas Code
+}
+
+// ============================================
+// Bill Structure Models
+// ============================================
+
+// Represents an ARTICLE section in an omnibus bill
+model BillArticle {
+  id            String   @id @default(cuid())
+  billId        String
+  bill          Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+  articleNumber String // Can be "1", "I", "A", etc.
+  title         String // Article title/heading
+  startLine     Int // Starting line number in bill text
+  endLine       Int // Ending line number in bill text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([billId])
+  @@index([articleNumber])
+  @@map("bill_article")
+}
+
+// Represents a reference to a specific code section being modified
+model BillCodeReference {
+  id          String              @id @default(cuid())
+  billId      String
+  bill        Bill                @relation(fields: [billId], references: [id], onDelete: Cascade)
+  code        String // e.g., "Education Code", "Government Code"
+  title       String? // e.g., "Title 2"
+  chapter     String // e.g., "Chapter 29"
+  subchapter  String? // e.g., "Subchapter A"
+  section     String // e.g., "Section 29.914" or "29.914"
+  subsections String[] // e.g., ["(a)", "(b)", "(c)(1)"]
+  action      CodeReferenceAction // add, amend, repeal
+  billSection String // Which SECTION of the bill this comes from (e.g., "SECTION 1")
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([billId])
+  @@index([code])
+  @@index([action])
+  @@index([billId, code])
+  @@map("bill_code_reference")
+}
+
+enum CodeReferenceAction {
+  ADD // Adding new section
+  AMEND // Modifying existing section
+  REPEAL // Removing section
+}
+
+// Tracks terminology replacement patterns in bills
+model TerminologyReplacement {
+  id              String   @id @default(cuid())
+  billId          String
+  bill            Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+  fromTerm        String // Original term being replaced
+  toTerm          String // New term replacing it
+  occurrenceCount Int // Number of times this replacement appears
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([billId, fromTerm, toTerm]) // Prevent duplicate entries
+  @@index([billId])
+  @@index([fromTerm])
+  @@map("terminology_replacement")
 }
 
 // ============================================
