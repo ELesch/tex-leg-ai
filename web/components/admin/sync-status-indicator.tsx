@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, PauseCircle, AlertCircle, CheckCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Loader2, PauseCircle, AlertCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 interface SyncJob {
   id: string;
@@ -14,6 +14,7 @@ interface SyncJob {
   totalErrors: number;
   billTypes: string[];
   completedTypes: Record<string, boolean>;
+  progressByType: Record<string, number>;
 }
 
 interface SyncStatusIndicatorProps {
@@ -23,25 +24,28 @@ interface SyncStatusIndicatorProps {
 export function SyncStatusIndicator({ isAdmin = false }: SyncStatusIndicatorProps) {
   const router = useRouter();
   const [job, setJob] = useState<SyncJob | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const processingRef = useRef(false);
 
   const fetchStatus = useCallback(async () => {
+    if (!isAdmin) return;
     try {
       const response = await fetch('/api/admin/sync/job');
       if (response.ok) {
         const data = await response.json();
         setJob(data.job);
+        return data.job;
       }
     } catch {
-      // Ignore errors for non-admins
+      // Ignore errors
     }
-  }, []);
+    return null;
+  }, [isAdmin]);
 
   // Process next batch if job is running
   const processNextBatch = useCallback(async () => {
-    if (!job || job.status !== 'RUNNING' || isProcessing) return;
+    if (!job || job.status !== 'RUNNING' || processingRef.current) return;
 
-    setIsProcessing(true);
+    processingRef.current = true;
     try {
       const response = await fetch('/api/admin/sync/job', {
         method: 'POST',
@@ -56,30 +60,41 @@ export function SyncStatusIndicator({ isAdmin = false }: SyncStatusIndicatorProp
     } catch {
       // Will retry on next interval
     } finally {
-      setIsProcessing(false);
+      processingRef.current = false;
     }
-  }, [job, isProcessing]);
+  }, [job]);
 
-  // Poll for status
+  // Initial fetch and polling for status
   useEffect(() => {
     if (!isAdmin) return;
 
     fetchStatus();
-    const interval = setInterval(fetchStatus, 5000);
+    const interval = setInterval(fetchStatus, 3000);
     return () => clearInterval(interval);
   }, [isAdmin, fetchStatus]);
 
-  // Auto-process when running
+  // Auto-process batches when running - this keeps sync going even when away from sync page
   useEffect(() => {
     if (!isAdmin || !job || job.status !== 'RUNNING') return;
 
-    // Immediately process next batch when running
-    const timeout = setTimeout(processNextBatch, 100);
-    return () => clearTimeout(timeout);
-  }, [isAdmin, job, processNextBatch]);
+    // Process immediately, then continue every 500ms
+    const processLoop = async () => {
+      if (processingRef.current) return;
+      await processNextBatch();
+    };
 
-  // Don't show if not admin or no active job
-  if (!isAdmin || !job || job.status === 'COMPLETED' || job.status === 'STOPPED') {
+    processLoop();
+    const interval = setInterval(processLoop, 500);
+    return () => clearInterval(interval);
+  }, [isAdmin, job?.status, job?.id, processNextBatch]);
+
+  // Don't show if not admin
+  if (!isAdmin) {
+    return null;
+  }
+
+  // Don't show if no active job
+  if (!job || job.status === 'COMPLETED' || job.status === 'STOPPED') {
     return null;
   }
 
@@ -90,42 +105,57 @@ export function SyncStatusIndicator({ isAdmin = false }: SyncStatusIndicatorProp
   const getStatusIcon = () => {
     switch (job.status) {
       case 'RUNNING':
-        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+        return <Loader2 className="h-3 w-3 animate-spin" />;
       case 'PAUSED':
-        return <PauseCircle className="h-4 w-4 text-yellow-500" />;
+        return <PauseCircle className="h-3 w-3" />;
       case 'ERROR':
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
+        return <AlertCircle className="h-3 w-3" />;
       default:
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <Loader2 className="h-3 w-3" />;
     }
   };
 
-  const getStatusText = () => {
-    const completedCount = Object.values(job.completedTypes).filter(Boolean).length;
-    const totalTypes = job.billTypes.length;
+  const getBillCount = () => {
+    return job.totalCreated + job.totalUpdated;
+  };
 
+  const getVariant = () => {
     switch (job.status) {
       case 'RUNNING':
-        return `Syncing... (${job.totalCreated + job.totalUpdated} bills)`;
+        return 'default';
       case 'PAUSED':
-        return `Paused (${job.totalCreated + job.totalUpdated} bills)`;
+        return 'secondary';
       case 'ERROR':
-        return 'Sync error';
+        return 'destructive';
       default:
-        return `${completedCount}/${totalTypes} types done`;
+        return 'outline';
+    }
+  };
+
+  const getStatusLabel = () => {
+    switch (job.status) {
+      case 'RUNNING':
+        return 'Syncing';
+      case 'PAUSED':
+        return 'Paused';
+      case 'ERROR':
+        return 'Error';
+      default:
+        return 'Sync';
     }
   };
 
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="flex items-center gap-2 h-8 px-2"
+    <Badge
+      variant={getVariant()}
+      className="cursor-pointer flex items-center gap-1.5 px-2 py-1"
       onClick={handleClick}
       title={`Bill Sync ${job.status.toLowerCase()} - ${job.totalCreated} created, ${job.totalUpdated} updated. Click to view details.`}
     >
       {getStatusIcon()}
-      <span className="text-xs hidden sm:inline">{getStatusText()}</span>
-    </Button>
+      <span className="text-xs font-medium">
+        {getStatusLabel()}: {getBillCount()}
+      </span>
+    </Badge>
   );
 }

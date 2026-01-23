@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -56,15 +56,6 @@ interface SyncJob {
   lastError: string | null;
 }
 
-interface BatchResult {
-  processed: number;
-  created: number;
-  updated: number;
-  errors: number;
-  isComplete: boolean;
-  message: string;
-}
-
 export default function AdminSyncPage() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [job, setJob] = useState<SyncJob | null>(null);
@@ -72,10 +63,7 @@ export default function AdminSyncPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [recentBatches, setRecentBatches] = useState<BatchResult[]>([]);
   const { toast } = useToast();
-  const processingRef = useRef(false);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -108,64 +96,27 @@ export default function AdminSyncPage() {
     Promise.all([fetchStatus(), fetchJob()]).finally(() => setLoading(false));
   }, [fetchStatus, fetchJob]);
 
-  // Poll for job updates
+  // Poll for job and status updates
   useEffect(() => {
     const interval = setInterval(() => {
       fetchJob();
-      if (job?.status === 'RUNNING' || job?.status === 'COMPLETED') {
-        fetchStatus();
-      }
+      fetchStatus();
     }, 2000);
     return () => clearInterval(interval);
-  }, [fetchJob, fetchStatus, job?.status]);
+  }, [fetchJob, fetchStatus]);
 
-  // Auto-process batches when running
-  const processNextBatch = useCallback(async () => {
-    if (!job || job.status !== 'RUNNING' || processingRef.current) return;
-
-    processingRef.current = true;
-    setIsProcessing(true);
-
-    try {
-      const response = await fetch('/api/admin/sync/job', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'process', jobId: job.id }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setJob(data.job);
-        if (data.batch) {
-          setRecentBatches((prev) => [data.batch, ...prev].slice(0, 5));
-        }
-        if (data.batch?.isComplete) {
-          fetchStatus();
-          toast({
-            title: 'Sync complete',
-            description: `Synced ${data.job.totalCreated + data.job.totalUpdated} bills`,
-          });
-        }
-      }
-    } catch {
-      // Will retry
-    } finally {
-      processingRef.current = false;
-      setIsProcessing(false);
-    }
-  }, [job, fetchStatus, toast]);
-
-  // Trigger batch processing when job is running
+  // Show toast when sync completes
   useEffect(() => {
-    if (job?.status === 'RUNNING' && !processingRef.current) {
-      const timeout = setTimeout(processNextBatch, 500);
-      return () => clearTimeout(timeout);
+    if (job?.status === 'COMPLETED') {
+      toast({
+        title: 'Sync complete',
+        description: `Synced ${job.totalCreated + job.totalUpdated} bills`,
+      });
     }
-  }, [job, processNextBatch]);
+  }, [job?.status, job?.totalCreated, job?.totalUpdated, toast]);
 
   const handleStartSync = async () => {
     setConfirmOpen(false);
-    setRecentBatches([]);
     try {
       const response = await fetch('/api/admin/sync/job', {
         method: 'POST',
@@ -457,20 +408,13 @@ export default function AdminSyncPage() {
                 <span className="text-muted-foreground">Errors:</span>
                 <span className="font-medium text-red-600">{job.totalErrors}</span>
               </div>
-              {isProcessing && (
+              {isRunning && (
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  Processing...
+                  Processing batches...
                 </div>
               )}
             </div>
-
-            {/* Recent batches */}
-            {recentBatches.length > 0 && (
-              <div className="text-xs text-muted-foreground">
-                Last batch: {recentBatches[0].message}
-              </div>
-            )}
           </CardContent>
         </Card>
       )}
