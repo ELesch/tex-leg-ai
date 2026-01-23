@@ -11,8 +11,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { FileText, Menu, User, LogOut, Settings, Bookmark } from 'lucide-react';
+import { FileText, Menu, LogOut, Settings, Bookmark } from 'lucide-react';
 import { ThemeSwitcher } from '@/components/theme-switcher';
+import { SyncStatusIndicator } from '@/components/admin/sync-status-indicator';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -55,6 +56,8 @@ export function Header() {
 
         {/* User Menu */}
         <div className="flex items-center gap-4">
+          {/* Sync Status for Admins */}
+          <SyncStatusIndicator isAdmin={session?.user?.role === 'ADMIN'} />
           <ThemeSwitcher />
           {status === 'loading' ? (
             <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />

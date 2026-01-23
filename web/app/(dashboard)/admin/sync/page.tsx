@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/use-toast';
 import {
   Dialog,
@@ -14,9 +15,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Trash2, AlertTriangle } from 'lucide-react';
-import { useSyncStream } from '@/hooks/use-sync-stream';
-import { SyncProgress } from '@/components/admin/sync-progress';
+import {
+  RefreshCw,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Trash2,
+  AlertTriangle,
+  Pause,
+  Play,
+  Square,
+} from 'lucide-react';
 
 interface SyncStatus {
   totalBills: number;
@@ -27,70 +37,216 @@ interface SyncStatus {
   sessionCode: string;
 }
 
+interface SyncJob {
+  id: string;
+  status: 'PENDING' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'STOPPED' | 'ERROR';
+  sessionCode: string;
+  sessionName: string;
+  billTypes: string[];
+  progressByType: Record<string, number>;
+  completedTypes: Record<string, boolean>;
+  totalProcessed: number;
+  totalCreated: number;
+  totalUpdated: number;
+  totalErrors: number;
+  startedAt: string | null;
+  pausedAt: string | null;
+  completedAt: string | null;
+  lastActivityAt: string;
+  lastError: string | null;
+}
+
+interface BatchResult {
+  processed: number;
+  created: number;
+  updated: number;
+  errors: number;
+  isComplete: boolean;
+  message: string;
+}
+
 export default function AdminSyncPage() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
+  const [job, setJob] = useState<SyncJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [recentBatches, setRecentBatches] = useState<BatchResult[]>([]);
   const { toast } = useToast();
-
-  const syncStream = useSyncStream();
-  const { isConnecting, isSyncing, isPaused, result, error, startSync, reset } = syncStream;
+  const processingRef = useRef(false);
 
   const fetchStatus = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/sync/status');
-      if (!response.ok) {
-        throw new Error('Failed to fetch status');
+      if (response.ok) {
+        const data = await response.json();
+        setStatus(data.status);
       }
-      const data = await response.json();
-      setStatus(data.status);
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const fetchJob = useCallback(async () => {
+    try {
+      const response = await fetch('/api/admin/sync/job');
+      if (response.ok) {
+        const data = await response.json();
+        setJob(data.job);
+        return data.job;
+      }
+    } catch {
+      // Ignore
+    }
+    return null;
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    Promise.all([fetchStatus(), fetchJob()]).finally(() => setLoading(false));
+  }, [fetchStatus, fetchJob]);
+
+  // Poll for job updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchJob();
+      if (job?.status === 'RUNNING' || job?.status === 'COMPLETED') {
+        fetchStatus();
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [fetchJob, fetchStatus, job?.status]);
+
+  // Auto-process batches when running
+  const processNextBatch = useCallback(async () => {
+    if (!job || job.status !== 'RUNNING' || processingRef.current) return;
+
+    processingRef.current = true;
+    setIsProcessing(true);
+
+    try {
+      const response = await fetch('/api/admin/sync/job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'process', jobId: job.id }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setJob(data.job);
+        if (data.batch) {
+          setRecentBatches((prev) => [data.batch, ...prev].slice(0, 5));
+        }
+        if (data.batch?.isComplete) {
+          fetchStatus();
+          toast({
+            title: 'Sync complete',
+            description: `Synced ${data.job.totalCreated + data.job.totalUpdated} bills`,
+          });
+        }
+      }
+    } catch {
+      // Will retry
+    } finally {
+      processingRef.current = false;
+      setIsProcessing(false);
+    }
+  }, [job, fetchStatus, toast]);
+
+  // Trigger batch processing when job is running
+  useEffect(() => {
+    if (job?.status === 'RUNNING' && !processingRef.current) {
+      const timeout = setTimeout(processNextBatch, 500);
+      return () => clearTimeout(timeout);
+    }
+  }, [job, processNextBatch]);
+
+  const handleStartSync = async () => {
+    setConfirmOpen(false);
+    setRecentBatches([]);
+    try {
+      const response = await fetch('/api/admin/sync/job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start' }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setJob(data.job);
+        toast({ title: 'Sync started', description: 'Background sync has begun' });
+      } else {
+        const data = await response.json();
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to start sync',
+          variant: 'destructive',
+        });
+      }
     } catch {
       toast({
         title: 'Error',
-        description: 'Failed to fetch sync status',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    fetchStatus();
-  }, [fetchStatus]);
-
-  // Refresh status when sync completes
-  useEffect(() => {
-    if (result) {
-      fetchStatus();
-      toast({
-        title: 'Sync complete',
-        description: `Synced ${result.summary.fetched} bills (${result.summary.created} new, ${result.summary.updated} updated)`,
-      });
-    }
-  }, [result, fetchStatus, toast]);
-
-  // Show toast on error
-  useEffect(() => {
-    if (error) {
-      toast({
-        title: 'Sync failed',
-        description: error,
+        description: 'Failed to start sync',
         variant: 'destructive',
       });
     }
-  }, [error, toast]);
-
-  const handleStartSync = () => {
-    setConfirmOpen(false);
-    startSync({ syncUntilComplete: true });
   };
 
-  const handleRetry = () => {
-    reset();
-    startSync({ syncUntilComplete: true });
+  const handlePause = async () => {
+    if (!job) return;
+    try {
+      const response = await fetch('/api/admin/sync/job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'pause', jobId: job.id }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setJob(data.job);
+        toast({ title: 'Sync paused' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Failed to pause sync', variant: 'destructive' });
+    }
+  };
+
+  const handleResume = async () => {
+    if (!job) return;
+    try {
+      const response = await fetch('/api/admin/sync/job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'resume', jobId: job.id }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setJob(data.job);
+        toast({ title: 'Sync resumed' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Failed to resume sync', variant: 'destructive' });
+    }
+  };
+
+  const handleStop = async () => {
+    if (!job) return;
+    try {
+      const response = await fetch('/api/admin/sync/job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'stop', jobId: job.id }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setJob(data.job);
+        fetchStatus();
+        toast({ title: 'Sync stopped' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Failed to stop sync', variant: 'destructive' });
+    }
   };
 
   const handleClearData = async () => {
@@ -98,21 +254,19 @@ export default function AdminSyncPage() {
     try {
       const response = await fetch('/api/admin/sync/clear', {
         method: 'DELETE',
-        headers: {
-          'x-confirm-delete': 'CONFIRM_DELETE_ALL_DATA',
-        },
+        headers: { 'x-confirm-delete': 'CONFIRM_DELETE_ALL_DATA' },
       });
 
-      if (!response.ok) {
+      if (response.ok) {
+        const data = await response.json();
+        toast({
+          title: 'Data cleared',
+          description: `Deleted ${data.deleted.bills} bills and related data`,
+        });
+        fetchStatus();
+      } else {
         throw new Error('Failed to clear data');
       }
-
-      const data = await response.json();
-      toast({
-        title: 'Data cleared',
-        description: `Deleted ${data.deleted.bills} bills and related data`,
-      });
-      fetchStatus();
     } catch {
       toast({
         title: 'Error',
@@ -125,7 +279,9 @@ export default function AdminSyncPage() {
     }
   };
 
-  const syncing = isConnecting || isSyncing;
+  const isActive = job?.status === 'RUNNING' || job?.status === 'PAUSED';
+  const isRunning = job?.status === 'RUNNING';
+  const isPaused = job?.status === 'PAUSED';
 
   if (loading) {
     return (
@@ -150,7 +306,7 @@ export default function AdminSyncPage() {
             <DialogTrigger asChild>
               <Button
                 variant="outline"
-                disabled={syncing || isPaused || isClearing || !status?.totalBills}
+                disabled={isActive || isClearing || !status?.totalBills}
               >
                 {isClearing ? (
                   <>
@@ -202,18 +358,9 @@ export default function AdminSyncPage() {
           {/* Sync Button */}
           <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
             <DialogTrigger asChild>
-              <Button disabled={syncing || isPaused || !status?.syncEnabled}>
-                {syncing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Syncing...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Start Sync
-                  </>
-                )}
+              <Button disabled={isActive || !status?.syncEnabled}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Start Sync
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -221,8 +368,8 @@ export default function AdminSyncPage() {
                 <DialogTitle>Start Bill Sync</DialogTitle>
                 <DialogDescription>
                   This will fetch all new bills from the Texas Legislature website and
-                  update the database. The sync will continue until all bill types have
-                  been fully checked. You can pause or stop the sync at any time.
+                  update the database. The sync runs in the background - you can navigate
+                  away and it will continue. You can pause or stop the sync at any time.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
@@ -236,8 +383,129 @@ export default function AdminSyncPage() {
         </div>
       </div>
 
-      {/* Sync Progress */}
-      <SyncProgress syncState={syncStream} onRetry={handleRetry} />
+      {/* Sync Progress Card */}
+      {isActive && job && (
+        <Card className={isPaused ? 'border-yellow-500' : 'border-blue-500'}>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                {isRunning ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                    Syncing {job.billTypes.find((t) => !job.completedTypes[t]) || 'bills'}...
+                  </>
+                ) : (
+                  <>
+                    <Pause className="h-5 w-5 text-yellow-500" />
+                    Sync Paused
+                  </>
+                )}
+              </CardTitle>
+              <div className="flex gap-2">
+                {isRunning ? (
+                  <Button variant="outline" size="sm" onClick={handlePause}>
+                    <Pause className="mr-1 h-4 w-4" />
+                    Pause
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={handleResume}>
+                    <Play className="mr-1 h-4 w-4" />
+                    Resume
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" onClick={handleStop}>
+                  <Square className="mr-1 h-4 w-4" />
+                  Stop
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Progress by type */}
+            <div className="space-y-2">
+              {job.billTypes.map((type) => (
+                <div key={type} className="space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{type} Bills</span>
+                    <span className="font-medium">
+                      {job.completedTypes[type] ? (
+                        <span className="text-green-600">Complete</span>
+                      ) : (
+                        `Checked up to ${type} ${job.progressByType[type] || 0}`
+                      )}
+                    </span>
+                  </div>
+                  <Progress
+                    value={job.completedTypes[type] ? 100 : undefined}
+                    className="h-2"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Stats */}
+            <div className="flex gap-4 text-sm">
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">Created:</span>
+                <span className="font-medium text-green-600">{job.totalCreated}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">Updated:</span>
+                <span className="font-medium text-blue-600">{job.totalUpdated}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">Errors:</span>
+                <span className="font-medium text-red-600">{job.totalErrors}</span>
+              </div>
+              {isProcessing && (
+                <div className="flex items-center gap-1 text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Processing...
+                </div>
+              )}
+            </div>
+
+            {/* Recent batches */}
+            {recentBatches.length > 0 && (
+              <div className="text-xs text-muted-foreground">
+                Last batch: {recentBatches[0].message}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Completed message */}
+      {job?.status === 'COMPLETED' && (
+        <Card className="border-green-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-green-600">
+              <CheckCircle className="h-5 w-5" />
+              Sync Complete
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-4">
+              <div className="rounded-lg bg-muted p-3">
+                <p className="text-sm text-muted-foreground">Processed</p>
+                <p className="text-2xl font-bold">{job.totalProcessed}</p>
+              </div>
+              <div className="rounded-lg bg-muted p-3">
+                <p className="text-sm text-muted-foreground">Created</p>
+                <p className="text-2xl font-bold text-green-600">{job.totalCreated}</p>
+              </div>
+              <div className="rounded-lg bg-muted p-3">
+                <p className="text-sm text-muted-foreground">Updated</p>
+                <p className="text-2xl font-bold text-blue-600">{job.totalUpdated}</p>
+              </div>
+              <div className="rounded-lg bg-muted p-3">
+                <p className="text-sm text-muted-foreground">Errors</p>
+                <p className="text-2xl font-bold text-red-600">{job.totalErrors}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Status Cards */}
       <div className="grid gap-4 md:grid-cols-3">

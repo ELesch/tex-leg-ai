@@ -773,3 +773,55 @@ model SharedContact {
   @@index([teamId])
   @@map("shared_contact")
 }
+
+// ============================================
+// Sync Job Model (Background Sync State)
+// ============================================
+
+model SyncJob {
+  id        String        @id @default(cuid())
+  status    SyncJobStatus @default(PENDING)
+
+  // Configuration
+  sessionCode   String
+  sessionName   String
+  billTypes     String[]  // Array of bill types to sync
+
+  // Progress tracking per bill type
+  // Format: {"HB": 150, "SB": 75} - last bill number checked for each type
+  progressByType Json      @default("{}")
+
+  // Statistics
+  totalProcessed Int       @default(0)
+  totalCreated   Int       @default(0)
+  totalUpdated   Int       @default(0)
+  totalErrors    Int       @default(0)
+
+  // Bill type completion status
+  // Format: {"HB": true, "SB": false} - whether type is exhausted
+  completedTypes Json      @default("{}")
+
+  // Timing
+  startedAt     DateTime?
+  pausedAt      DateTime?
+  completedAt   DateTime?
+  lastActivityAt DateTime  @default(now())
+
+  // Error tracking
+  lastError     String?   @db.Text
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status])
+  @@map("sync_job")
+}
+
+enum SyncJobStatus {
+  PENDING     // Created but not started
+  RUNNING     // Currently processing
+  PAUSED      // User paused
+  COMPLETED   // All bill types exhausted
+  STOPPED     // User stopped manually
+  ERROR       // Failed with error
+}
