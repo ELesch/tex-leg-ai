@@ -299,29 +299,98 @@ async function getLastSyncedBillNumbers(
 }
 
 /**
- * Fetch bill data from Texas Legislature with progress callbacks
- * Uses direct bill number iteration since the report URLs no longer work
- * Continues from where the last sync left off
+ * Save a single bill to the database
+ * Returns 'created', 'updated', or 'error'
  */
-async function fetchBillsFromLegislature(
+async function saveBillToDatabase(
+  bill: BillData,
+  sessionId: string
+): Promise<'created' | 'updated' | 'error'> {
+  try {
+    const existing = await prisma.bill.findUnique({
+      where: { billId: bill.billId },
+      select: { id: true },
+    });
+
+    if (existing) {
+      await prisma.bill.update({
+        where: { billId: bill.billId },
+        data: {
+          description: bill.description,
+          content: bill.content,
+          authors: bill.authors,
+          status: bill.status,
+          lastAction: bill.lastAction,
+          lastActionDate: bill.lastActionDate,
+        },
+      });
+      return 'updated';
+    } else {
+      await prisma.bill.create({
+        data: {
+          sessionId: sessionId,
+          billType: bill.billType,
+          billNumber: bill.billNumber,
+          billId: bill.billId,
+          filename: `${bill.billType.toLowerCase()}${bill.billNumber}.txt`,
+          description: bill.description,
+          content: bill.content,
+          authors: bill.authors,
+          subjects: [],
+          status: bill.status,
+          lastAction: bill.lastAction,
+          lastActionDate: bill.lastActionDate,
+        },
+      });
+      return 'created';
+    }
+  } catch (error) {
+    console.error(`Error saving ${bill.billId}:`, error);
+    return 'error';
+  }
+}
+
+/**
+ * Fetch and process bills from Texas Legislature
+ * Each bill is saved immediately after fetching - no data is lost if sync is stopped
+ */
+async function fetchAndProcessBills(
   sessionCode: string,
+  sessionName: string,
   maxBills: number,
   batchDelay: number,
   billTypes: BillType[],
   onEvent: EventCallback,
   syncUntilComplete: boolean = false,
   abortSignal?: { aborted: boolean }
-): Promise<BillData[]> {
-  const bills: BillData[] = [];
+): Promise<{ fetched: number; created: number; updated: number; errors: number }> {
   const maxPerType = syncUntilComplete ? Infinity : Math.floor(maxBills / billTypes.length);
   const maxConsecutiveFailures = 10; // Stop after N consecutive 404s
 
+  let totalProcessed = 0;
+  let totalFetched = 0;
+  let created = 0;
+  let updated = 0;
+  let errors = 0;
+
   onEvent('log', {
-    message: `Starting fetch: session=${sessionCode}, ${syncUntilComplete ? 'sync until complete' : `maxBills=${maxBills}`}, types=${billTypes.join(',')}`,
+    message: `Starting sync: session=${sessionCode}, ${syncUntilComplete ? 'sync until complete' : `maxBills=${maxBills}`}, types=${billTypes.join(',')}`,
     level: 'info',
   } as SyncLogEvent);
 
-  // Get the last synced bill numbers from the database
+  // Ensure the session exists
+  const session = await prisma.legislatureSession.upsert({
+    where: { code: sessionCode },
+    update: {},
+    create: {
+      code: sessionCode,
+      name: sessionName,
+      startDate: new Date('2025-01-14'),
+      isActive: true,
+    },
+  });
+
+  // Get the highest bill number already in the database for each type
   const lastSyncedNumbers = await getLastSyncedBillNumbers(billTypes);
 
   billTypes.forEach((type) => {
@@ -332,8 +401,6 @@ async function fetchBillsFromLegislature(
     } as SyncLogEvent);
   });
 
-  let totalProcessed = 0;
-  let totalFound = 0;
   const billTypeStatus = new Map<BillType, { exhausted: boolean; lastBillNumber: number }>();
 
   for (const billType of billTypes) {
@@ -349,16 +416,16 @@ async function fetchBillsFromLegislature(
     const startNumber = (lastSyncedNumbers.get(billType) || 0) + 1;
 
     onEvent('phase', {
-      phase: 'fetching_list',
-      message: `Fetching ${billType} bills starting from ${billType} ${startNumber}...`,
+      phase: 'processing_bills',
+      message: `Processing ${billType} bills starting from ${billType} ${startNumber}...`,
     } as SyncPhaseEvent);
 
     let consecutiveFailures = 0;
-    let billsFoundForType = 0;
+    let billsProcessedForType = 0;
     let billNumber = startNumber;
     let typeExhausted = false;
 
-    while (billsFoundForType < maxPerType && consecutiveFailures < maxConsecutiveFailures) {
+    while (billsProcessedForType < maxPerType && consecutiveFailures < maxConsecutiveFailures) {
       // Check for abort
       if (abortSignal?.aborted) {
         onEvent('log', {
@@ -370,10 +437,10 @@ async function fetchBillsFromLegislature(
 
       totalProcessed++;
 
-      // For sync until complete, show a different progress format
+      // Update progress
       if (syncUntilComplete) {
         onEvent('progress', {
-          current: totalFound,
+          current: totalFetched,
           total: totalProcessed,
           percent: consecutiveFailures > 0
             ? Math.round(((maxConsecutiveFailures - consecutiveFailures) / maxConsecutiveFailures) * 100)
@@ -389,17 +456,41 @@ async function fetchBillsFromLegislature(
         } as SyncProgressEvent);
       }
 
+      // Fetch bill data from legislature
       const billData = await fetchBillDetails(sessionCode, billType, billNumber);
 
       if (billData) {
-        bills.push(billData);
-        billsFoundForType++;
-        totalFound++;
+        totalFetched++;
+        billsProcessedForType++;
         consecutiveFailures = 0;
 
-        if (billsFoundForType % 10 === 0) {
+        // Immediately save to database
+        const saveResult = await saveBillToDatabase(billData, session.id);
+
+        if (saveResult === 'created') {
+          created++;
+          onEvent('bill', {
+            billId: billData.billId,
+            status: 'created',
+          } as SyncBillEvent);
+        } else if (saveResult === 'updated') {
+          updated++;
+          onEvent('bill', {
+            billId: billData.billId,
+            status: 'updated',
+          } as SyncBillEvent);
+        } else {
+          errors++;
+          onEvent('bill', {
+            billId: billData.billId,
+            status: 'error',
+            message: 'Failed to save to database',
+          } as SyncBillEvent);
+        }
+
+        if (billsProcessedForType % 10 === 0) {
           onEvent('log', {
-            message: `Found ${billsFoundForType} new ${billType} bills so far...`,
+            message: `Processed ${billsProcessedForType} ${billType} bills (${created} created, ${updated} updated)`,
             level: 'info',
           } as SyncLogEvent);
         }
@@ -418,7 +509,7 @@ async function fetchBillsFromLegislature(
     if (consecutiveFailures >= maxConsecutiveFailures) {
       typeExhausted = true;
       onEvent('log', {
-        message: `${billType} complete: reached end of filed bills after ${billsFoundForType} new bills`,
+        message: `${billType} complete: reached end of filed bills after ${billsProcessedForType} bills`,
         level: 'info',
       } as SyncLogEvent);
     }
@@ -429,7 +520,7 @@ async function fetchBillsFromLegislature(
     });
 
     onEvent('log', {
-      message: `Finished ${billType}: found ${billsFoundForType} new bills (checked ${billType} ${startNumber} to ${billNumber - 1})${typeExhausted ? ' - EXHAUSTED' : ''}`,
+      message: `Finished ${billType}: processed ${billsProcessedForType} bills (checked ${billType} ${startNumber} to ${billNumber - 1})${typeExhausted ? ' - EXHAUSTED' : ''}`,
       level: 'info',
     } as SyncLogEvent);
   }
@@ -445,97 +536,7 @@ async function fetchBillsFromLegislature(
     } as SyncLogEvent);
   }
 
-  return bills;
-}
-
-/**
- * Save bills to database with progress callbacks
- */
-async function syncBillsToDatabase(
-  bills: BillData[],
-  sessionCode: string,
-  sessionName: string,
-  onEvent: EventCallback
-): Promise<{ created: number; updated: number; errors: number }> {
-  let created = 0;
-  let updated = 0;
-  let errors = 0;
-
-  onEvent('phase', {
-    phase: 'saving',
-    message: 'Saving bills to database...',
-  } as SyncPhaseEvent);
-
-  const session = await prisma.legislatureSession.upsert({
-    where: { code: sessionCode },
-    update: {},
-    create: {
-      code: sessionCode,
-      name: sessionName,
-      startDate: new Date('2025-01-14'),
-      isActive: true,
-    },
-  });
-
-  for (const bill of bills) {
-    try {
-      const existing = await prisma.bill.findUnique({
-        where: { billId: bill.billId },
-        select: { id: true },
-      });
-
-      if (existing) {
-        await prisma.bill.update({
-          where: { billId: bill.billId },
-          data: {
-            description: bill.description,
-            content: bill.content,
-            authors: bill.authors,
-            status: bill.status,
-            lastAction: bill.lastAction,
-            lastActionDate: bill.lastActionDate,
-          },
-        });
-        updated++;
-        onEvent('bill', {
-          billId: bill.billId,
-          status: 'updated',
-        } as SyncBillEvent);
-      } else {
-        await prisma.bill.create({
-          data: {
-            sessionId: session.id,
-            billType: bill.billType,
-            billNumber: bill.billNumber,
-            billId: bill.billId,
-            filename: `${bill.billType.toLowerCase()}${bill.billNumber}.txt`,
-            description: bill.description,
-            content: bill.content,
-            authors: bill.authors,
-            subjects: [],
-            status: bill.status,
-            lastAction: bill.lastAction,
-            lastActionDate: bill.lastActionDate,
-          },
-        });
-        created++;
-        onEvent('bill', {
-          billId: bill.billId,
-          status: 'created',
-        } as SyncBillEvent);
-      }
-    } catch (error) {
-      console.error(`Error syncing ${bill.billId}:`, error);
-      errors++;
-      onEvent('bill', {
-        billId: bill.billId,
-        status: 'error',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      } as SyncBillEvent);
-    }
-  }
-
-  return { created, updated, errors };
+  return { fetched: totalFetched, created, updated, errors };
 }
 
 /**
@@ -600,8 +601,10 @@ export async function syncBillsWithProgress(
 
     console.log('Starting streaming bill sync...');
 
-    const bills = await fetchBillsFromLegislature(
+    // Fetch and process bills immediately (each bill saved right after fetching)
+    const result = await fetchAndProcessBills(
       sessionCode,
+      sessionName,
       maxBills,
       batchDelay,
       billTypes as BillType[],
@@ -609,10 +612,6 @@ export async function syncBillsWithProgress(
       syncUntilComplete,
       options.abortSignal
     );
-
-    console.log(`Fetched ${bills.length} bills from legislature`);
-
-    const result = await syncBillsToDatabase(bills, sessionCode, sessionName, onEvent);
 
     const duration = Date.now() - startTime;
 
@@ -625,7 +624,7 @@ export async function syncBillsWithProgress(
       success: true,
       duration,
       summary: {
-        fetched: bills.length,
+        fetched: result.fetched,
         created: result.created,
         updated: result.updated,
         errors: result.errors,
@@ -633,7 +632,6 @@ export async function syncBillsWithProgress(
     } as SyncCompleteEvent);
 
     console.log('Sync complete:', {
-      fetched: bills.length,
       ...result,
       duration: `${duration}ms`,
     });
