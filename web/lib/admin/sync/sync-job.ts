@@ -1,10 +1,11 @@
 import { prisma } from '@/lib/db/prisma';
 import { BillType, SyncJobStatus } from '@prisma/client';
 import { getSettingTyped, getSetting } from '@/lib/admin/settings';
+import { fetchBillXml, fetchBillTextFromUrl, scanAvailableBills } from './ftp-client';
+import { parseBillXml, ParsedBill } from './xml-parser';
 
 // Number of bills to process per batch (keep under Vercel timeout)
 const BATCH_SIZE = 20;
-const MAX_CONSECUTIVE_FAILURES = 10;
 
 interface BillData {
   billId: string;
@@ -13,9 +14,16 @@ interface BillData {
   description: string;
   content: string | null;
   authors: string[];
+  coauthors: string[];
+  sponsors: string[];
+  cosponsors: string[];
+  subjects: string[];
   status: string;
   lastAction: string;
   lastActionDate: Date | null;
+  lastUpdateFtp: Date | null;
+  committeeName: string | null;
+  committeeStatus: string | null;
 }
 
 export interface SyncJobState {
@@ -46,6 +54,9 @@ export interface BatchResult {
   isComplete: boolean;
   message: string;
 }
+
+// Cache for available bills per type (populated on first scan)
+const availableBillsCache = new Map<string, number[]>();
 
 /**
  * Get the current active sync job, if any
@@ -217,156 +228,74 @@ export async function stopSyncJob(jobId: string): Promise<SyncJobState> {
 }
 
 /**
- * Fetch bill text from Texas Legislature
+ * Convert parsed XML bill to BillData format
  */
-async function fetchBillText(
-  sessionCode: string,
-  billType: BillType,
-  billNumber: number
-): Promise<string | null> {
-  const paddedNumber = billNumber.toString().padStart(5, '0');
-  const billCode = `${billType}${paddedNumber}`;
-  const versions = ['E', 'H', 'S', 'I'];
-
-  for (const version of versions) {
-    try {
-      const url = `https://capitol.texas.gov/tlodocs/${sessionCode}/billtext/html/${billCode}${version}.htm`;
-      const response = await fetch(url, {
-        headers: { 'User-Agent': 'TxLegAI Bill Sync Bot (educational/research)' },
-      });
-
-      if (!response.ok) continue;
-
-      const html = await response.text();
-      if (html.includes('Website Error') || html.includes('Page Not Found')) continue;
-
-      const text = html
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
-        .replace(/<[^>]+>/g, '')
-        // Decode numeric HTML entities (&#xxx; and &#xXXX;)
-        .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
-        .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)))
-        // Decode common named HTML entities
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&apos;/g, "'")
-        .replace(/&mdash;/g, '—')
-        .replace(/&ndash;/g, '–')
-        .replace(/&rsquo;/g, "'")
-        .replace(/&lsquo;/g, "'")
-        .replace(/&rdquo;/g, '"')
-        .replace(/&ldquo;/g, '"')
-        .replace(/&sect;/g, '§')
-        .replace(/&para;/g, '¶')
-        .replace(/&copy;/g, '©')
-        .replace(/&reg;/g, '®')
-        .replace(/&deg;/g, '°')
-        .replace(/&frac12;/g, '½')
-        .replace(/&frac14;/g, '¼')
-        .replace(/&frac34;/g, '¾')
-        .replace(/&hellip;/g, '…')
-        .replace(/&bull;/g, '•')
-        .replace(/&middot;/g, '·')
-        .replace(/\r\n/g, '\n')
-        .replace(/[ \t]+/g, ' ')
-        .replace(/\n +/g, '\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-
-      if (text.length > 100) {
-        return text.substring(0, 50000);
-      }
-    } catch {
-      continue;
-    }
+async function convertParsedBillToBillData(
+  parsed: ParsedBill
+): Promise<BillData> {
+  // Fetch bill text if URL is available
+  let content: string | null = null;
+  if (parsed.textUrl) {
+    content = await fetchBillTextFromUrl(parsed.textUrl);
   }
 
-  return null;
+  // Get the most relevant committee info
+  let committeeName: string | null = null;
+  let committeeStatus: string | null = null;
+  if (parsed.committees.length > 0) {
+    // Prefer committee that's "In committee" or most recent
+    const inCommittee = parsed.committees.find(c => c.status.toLowerCase().includes('in committee'));
+    const committee = inCommittee || parsed.committees[0];
+    committeeName = committee.name;
+    committeeStatus = committee.status;
+  }
+
+  return {
+    billId: parsed.billId,
+    billType: parsed.billType,
+    billNumber: parsed.billNumber,
+    description: parsed.description,
+    content,
+    authors: parsed.authors,
+    coauthors: parsed.coauthors,
+    sponsors: parsed.sponsors,
+    cosponsors: parsed.cosponsors,
+    subjects: parsed.subjects,
+    status: parsed.status,
+    lastAction: parsed.lastAction,
+    lastActionDate: parsed.lastActionDate,
+    lastUpdateFtp: parsed.lastUpdate,
+    committeeName,
+    committeeStatus,
+  };
 }
 
 /**
- * Fetch bill details from Texas Legislature
+ * Fetch bill data from FTP server (XML-based)
  */
-async function fetchBillDetails(
+async function fetchBillFromFtp(
   sessionCode: string,
   billType: BillType,
   billNumber: number
 ): Promise<BillData | null> {
   try {
-    const url = `https://capitol.texas.gov/BillLookup/History.aspx?LegSess=${sessionCode}&Bill=${billType}${billNumber}`;
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'TxLegAI Bill Sync Bot (educational/research)' },
-    });
+    // Fetch XML from FTP
+    const xml = await fetchBillXml(sessionCode, billType, billNumber);
+    if (!xml) {
+      return null; // Bill doesn't exist
+    }
 
-    if (!response.ok) return null;
-
-    const html = await response.text();
-    if (html.includes('Website Error') || html.includes('unexpected error')) return null;
-
-    // Detect if we were redirected to home page (bill doesn't exist)
-    // Valid bill pages have "History for HB/SB XXX" in the title
-    const titleMatch = html.match(/History for (HB|SB)\s*(\d+)/i);
-    if (!titleMatch) {
-      // Not a valid bill page - likely redirected to home page
+    // Parse XML
+    const parsed = parseBillXml(xml);
+    if (!parsed) {
+      console.error(`Failed to parse XML for ${billType} ${billNumber}`);
       return null;
     }
 
-    const captionMatch = html.match(/id="cellCaptionText"[^>]*>([^<]+)/i);
-    // If no caption found, this isn't a valid bill page
-    if (!captionMatch) {
-      return null;
-    }
-    const description = captionMatch[1].trim();
-
-    const authorsMatch = html.match(/id="cellAuthors"[^>]*>([^<]+)/i);
-    const authors = authorsMatch
-      ? authorsMatch[1].split('|').map((a) => a.trim()).filter((a) => a.length > 0)
-      : [];
-
-    const actionMatches = html.match(
-      /(?:Referred to|Read first time|Passed|Filed|Signed by|Sent to|Reported|Effective|Enrolled)[^<]*/gi
-    );
-    const lastAction = actionMatches?.[0]?.replace(/&nbsp;/g, ' ').trim() || '';
-
-    let status = 'Filed';
-    if (html.includes('Signed by the Governor') || html.includes('Effective on')) {
-      status = 'Signed';
-    } else if (html.includes('Sent to the Governor')) {
-      status = 'Sent to Governor';
-    } else if (html.includes('Enrolled')) {
-      status = 'Enrolled';
-    } else if (html.match(/Passed.*Senate/i) && html.match(/Passed.*House/i)) {
-      status = 'Passed Both Chambers';
-    } else if (html.includes('>Passed<') || html.includes('Passed to engrossment')) {
-      status = 'Passed';
-    } else if (html.includes('Referred to')) {
-      status = 'In Committee';
-    }
-
-    const dateMatch = html.match(/(\d{2}\/\d{2}\/\d{4})/);
-    const lastActionDate = dateMatch ? new Date(dateMatch[1]) : null;
-
-    const content = await fetchBillText(sessionCode, billType, billNumber);
-
-    return {
-      billId: `${billType} ${billNumber}`,
-      billType,
-      billNumber,
-      description: description.substring(0, 2000),
-      content,
-      authors,
-      status,
-      lastAction: lastAction.substring(0, 500),
-      lastActionDate: isNaN(lastActionDate?.getTime() || NaN) ? null : lastActionDate,
-    };
+    // Convert to BillData format and fetch bill text
+    return await convertParsedBillToBillData(parsed);
   } catch (error) {
-    console.error(`Error fetching ${billType} ${billNumber}:`, error);
+    console.error(`Error fetching ${billType} ${billNumber} from FTP:`, error);
     return null;
   }
 }
@@ -391,9 +320,16 @@ async function saveBill(
           description: bill.description,
           content: bill.content,
           authors: bill.authors,
+          coauthors: bill.coauthors,
+          sponsors: bill.sponsors,
+          cosponsors: bill.cosponsors,
+          subjects: bill.subjects,
           status: bill.status,
           lastAction: bill.lastAction,
           lastActionDate: bill.lastActionDate,
+          lastUpdateFtp: bill.lastUpdateFtp,
+          committeeName: bill.committeeName,
+          committeeStatus: bill.committeeStatus,
         },
       });
       return 'updated';
@@ -408,10 +344,16 @@ async function saveBill(
           description: bill.description,
           content: bill.content,
           authors: bill.authors,
-          subjects: [],
+          coauthors: bill.coauthors,
+          sponsors: bill.sponsors,
+          cosponsors: bill.cosponsors,
+          subjects: bill.subjects,
           status: bill.status,
           lastAction: bill.lastAction,
           lastActionDate: bill.lastActionDate,
+          lastUpdateFtp: bill.lastUpdateFtp,
+          committeeName: bill.committeeName,
+          committeeStatus: bill.committeeStatus,
         },
       });
       return 'created';
@@ -420,6 +362,25 @@ async function saveBill(
     console.error(`Error saving ${bill.billId}:`, error);
     return 'error';
   }
+}
+
+/**
+ * Get or scan available bills for a bill type
+ */
+async function getAvailableBills(
+  sessionCode: string,
+  billType: string
+): Promise<number[]> {
+  const cacheKey = `${sessionCode}-${billType}`;
+
+  if (!availableBillsCache.has(cacheKey)) {
+    console.log(`Scanning available ${billType} bills from FTP...`);
+    const bills = await scanAvailableBills(sessionCode, billType);
+    availableBillsCache.set(cacheKey, bills);
+    console.log(`Found ${bills.length} ${billType} bills`);
+  }
+
+  return availableBillsCache.get(cacheKey) || [];
 }
 
 /**
@@ -498,11 +459,46 @@ export async function processSyncBatch(jobId: string): Promise<BatchResult> {
     };
   }
 
-  let consecutiveFailures = 0;
-  let billNumber = (progressByType[currentBillType] || 0) + 1;
+  // Get available bills for this type from FTP
+  const availableBills = await getAvailableBills(job.sessionCode, currentBillType);
 
-  // Process a batch
-  while (processed < BATCH_SIZE && consecutiveFailures < MAX_CONSECUTIVE_FAILURES) {
+  // Find bills that still need to be processed
+  const lastProcessed = progressByType[currentBillType] || 0;
+  const billsToProcess = availableBills.filter(num => num > lastProcessed);
+
+  if (billsToProcess.length === 0) {
+    // No more bills of this type
+    completedTypes[currentBillType] = true;
+
+    // Check if all types are now completed
+    const allCompleted = job.billTypes.every((type) => completedTypes[type]);
+
+    await prisma.syncJob.update({
+      where: { id: jobId },
+      data: {
+        completedTypes,
+        lastActivityAt: new Date(),
+        ...(allCompleted && { status: 'COMPLETED', completedAt: new Date() }),
+      },
+    });
+
+    return {
+      processed: 0,
+      created: 0,
+      updated: 0,
+      errors: 0,
+      billsProcessed: [],
+      isComplete: allCompleted,
+      message: allCompleted
+        ? 'All bill types have been fully synced'
+        : `Completed ${currentBillType}, moving to next type`,
+    };
+  }
+
+  // Process a batch of bills
+  const batchBills = billsToProcess.slice(0, BATCH_SIZE);
+
+  for (const billNumber of batchBills) {
     // Check if job was paused/stopped
     const currentJob = await prisma.syncJob.findUnique({
       where: { id: jobId },
@@ -512,7 +508,7 @@ export async function processSyncBatch(jobId: string): Promise<BatchResult> {
       break;
     }
 
-    const billData = await fetchBillDetails(job.sessionCode, currentBillType as BillType, billNumber);
+    const billData = await fetchBillFromFtp(job.sessionCode, currentBillType as BillType, billNumber);
 
     if (billData) {
       const saveResult = await saveBill(billData, session.id);
@@ -521,15 +517,12 @@ export async function processSyncBatch(jobId: string): Promise<BatchResult> {
       if (saveResult === 'created') created++;
       else if (saveResult === 'updated') updated++;
       else errors++;
-
-      consecutiveFailures = 0;
     } else {
-      consecutiveFailures++;
+      errors++;
     }
 
     processed++;
     progressByType[currentBillType] = billNumber;
-    billNumber++;
 
     // Rate limiting
     if (processed % 5 === 0) {
@@ -537,8 +530,9 @@ export async function processSyncBatch(jobId: string): Promise<BatchResult> {
     }
   }
 
-  // Check if this bill type is exhausted
-  if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+  // Check if this bill type is now exhausted
+  const remainingBills = availableBills.filter(num => num > progressByType[currentBillType]);
+  if (remainingBills.length === 0) {
     completedTypes[currentBillType] = true;
   }
 

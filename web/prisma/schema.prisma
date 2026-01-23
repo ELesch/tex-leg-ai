@@ -143,9 +143,15 @@ model Bill {
   // Bill metadata
   status         String?
   authors        String[]
+  coauthors      String[]   @default([])  // Separate from authors (from FTP XML)
+  sponsors       String[]   @default([])  // Senate sponsors for House bills
+  cosponsors     String[]   @default([])  // Senate cosponsors
   subjects       String[]
   lastAction     String?
   lastActionDate DateTime?
+  committeeName   String?    // Current committee name (from FTP XML)
+  committeeStatus String?    // "In committee", "Reported", etc.
+  lastUpdateFtp   DateTime?  // lastUpdate attribute from FTP XML
 
   // Bill structure & complexity analysis
   isPdfOnly     Boolean         @default(false) // true if bill text is only available as PDF
