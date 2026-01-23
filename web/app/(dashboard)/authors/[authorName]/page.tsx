@@ -43,12 +43,13 @@ function inferChamber(name: string): Chamber | null {
 }
 
 export default async function AuthorPage({ params }: AuthorPageProps) {
-  const { authorName } = params;
-  const decodedName = decodeURIComponent(authorName);
-  const session = await auth();
+  try {
+    const { authorName } = params;
+    const decodedName = decodeURIComponent(authorName);
+    const session = await auth();
 
-  // Find all bills where this author is in the authors array
-  const bills = await prisma.bill.findMany({
+    // Find all bills where this author is in the authors array
+    const bills = await prisma.bill.findMany({
     where: {
       authors: {
         has: decodedName,
@@ -158,4 +159,8 @@ export default async function AuthorPage({ params }: AuthorPageProps) {
       </div>
     </div>
   );
+  } catch (error) {
+    console.error('Error in AuthorPage:', error);
+    throw error;
+  }
 }
