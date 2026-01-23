@@ -9,10 +9,15 @@ import type {
   SyncLogEvent,
 } from '@/lib/admin/sync/bill-sync-stream';
 
+export interface SyncStreamOptions {
+  syncUntilComplete?: boolean;
+}
+
 export interface UseSyncStreamReturn {
-  startSync: () => void;
+  startSync: (options?: SyncStreamOptions) => void;
   isConnecting: boolean;
   isSyncing: boolean;
+  isPaused: boolean;
   phase: SyncPhaseEvent | null;
   progress: SyncProgressEvent | null;
   stats: { created: number; updated: number; errors: number };
@@ -21,6 +26,8 @@ export interface UseSyncStreamReturn {
   result: SyncCompleteEvent | null;
   error: string | null;
   abort: () => void;
+  pause: () => void;
+  resume: () => void;
   reset: () => void;
 }
 
@@ -30,6 +37,7 @@ const MAX_LOGS = 50;
 export function useSyncStream(): UseSyncStreamReturn {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [phase, setPhase] = useState<SyncPhaseEvent | null>(null);
   const [progress, setProgress] = useState<SyncProgressEvent | null>(null);
   const [stats, setStats] = useState({ created: 0, updated: 0, errors: 0 });
@@ -39,10 +47,13 @@ export function useSyncStream(): UseSyncStreamReturn {
   const [error, setError] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const pausedRef = useRef(false);
+  const lastOptionsRef = useRef<SyncStreamOptions | undefined>(undefined);
 
   const reset = useCallback(() => {
     setIsConnecting(false);
     setIsSyncing(false);
+    setIsPaused(false);
     setPhase(null);
     setProgress(null);
     setStats({ created: 0, updated: 0, errors: 0 });
@@ -50,6 +61,8 @@ export function useSyncStream(): UseSyncStreamReturn {
     setLogs([]);
     setResult(null);
     setError(null);
+    pausedRef.current = false;
+    lastOptionsRef.current = undefined;
   }, []);
 
   const abort = useCallback(() => {
@@ -59,21 +72,51 @@ export function useSyncStream(): UseSyncStreamReturn {
     }
     setIsConnecting(false);
     setIsSyncing(false);
+    setIsPaused(false);
+    pausedRef.current = false;
   }, []);
 
-  const startSync = useCallback(async () => {
-    // Reset state
-    reset();
+  const pause = useCallback(() => {
+    pausedRef.current = true;
+    setIsPaused(true);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsSyncing(false);
+  }, []);
+
+  const startSync = useCallback(async (options?: SyncStreamOptions) => {
+    // Store options for resume
+    if (options) {
+      lastOptionsRef.current = options;
+    }
+
+    // Reset state (but keep stats if resuming)
+    if (!pausedRef.current) {
+      reset();
+    } else {
+      // Just reset connection state, keep other state
+      setError(null);
+      setResult(null);
+    }
+
     setIsConnecting(true);
+    setIsPaused(false);
+    pausedRef.current = false;
 
     // Create new abort controller
     abortControllerRef.current = new AbortController();
+
+    const syncOptions = lastOptionsRef.current || options || {};
 
     try {
       const response = await fetch('/api/admin/sync/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          syncUntilComplete: syncOptions.syncUntilComplete ?? true,
+        }),
         signal: abortControllerRef.current.signal,
       });
 
@@ -189,10 +232,15 @@ export function useSyncStream(): UseSyncStreamReturn {
     }
   }, [reset]);
 
+  const resume = useCallback(() => {
+    startSync();
+  }, [startSync]);
+
   return {
     startSync,
     isConnecting,
     isSyncing,
+    isPaused,
     phase,
     progress,
     stats,
@@ -201,6 +249,8 @@ export function useSyncStream(): UseSyncStreamReturn {
     result,
     error,
     abort,
+    pause,
+    resume,
     reset,
   };
 }

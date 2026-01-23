@@ -13,6 +13,9 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronRight,
+  Pause,
+  Play,
+  Square,
 } from 'lucide-react';
 import type { UseSyncStreamReturn } from '@/hooks/use-sync-stream';
 import type { SyncLogEvent } from '@/lib/admin/sync/bill-sync-stream';
@@ -74,6 +77,7 @@ export function SyncProgress({ syncState, onRetry }: SyncProgressProps) {
   const {
     isConnecting,
     isSyncing,
+    isPaused,
     phase,
     progress,
     stats,
@@ -82,6 +86,8 @@ export function SyncProgress({ syncState, onRetry }: SyncProgressProps) {
     result,
     error,
     abort,
+    pause,
+    resume,
   } = syncState;
 
   const [logsExpanded, setLogsExpanded] = useState(false);
@@ -96,8 +102,59 @@ export function SyncProgress({ syncState, onRetry }: SyncProgressProps) {
   }, [isSyncing, isConnecting, result, error]);
 
   // Don't render if not active and no result/error
-  if (!isConnecting && !isSyncing && !result && !error) {
+  if (!isConnecting && !isSyncing && !isPaused && !result && !error) {
     return null;
+  }
+
+  // Paused state
+  if (isPaused && !result && !error) {
+    return (
+      <Card className="border-yellow-500">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-yellow-600">
+              <Pause className="h-5 w-5" />
+              Sync Paused
+            </CardTitle>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={resume}>
+                <Play className="mr-1 h-4 w-4" />
+                Resume
+              </Button>
+              <Button variant="outline" size="sm" onClick={abort}>
+                <Square className="mr-1 h-4 w-4" />
+                Stop
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Sync paused. Progress has been saved - click Resume to continue from where you left off.
+          </p>
+          {/* Stats */}
+          <div className="flex gap-4 text-sm">
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground">Created:</span>
+              <span className="font-medium text-green-600">{stats.created}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground">Updated:</span>
+              <span className="font-medium text-blue-600">{stats.updated}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground">Errors:</span>
+              <span className="font-medium text-red-600">{stats.errors}</span>
+            </div>
+          </div>
+          <DebugLogSection
+            logs={logs}
+            expanded={logsExpanded}
+            onToggle={() => setLogsExpanded(!logsExpanded)}
+          />
+        </CardContent>
+      </Card>
+    );
   }
 
   // Connecting state
@@ -204,9 +261,16 @@ export function SyncProgress({ syncState, onRetry }: SyncProgressProps) {
             <Loader2 className="h-5 w-5 animate-spin" />
             {phase?.message || 'Syncing...'}
           </CardTitle>
-          <Button variant="outline" size="sm" onClick={abort}>
-            Cancel
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={pause}>
+              <Pause className="mr-1 h-4 w-4" />
+              Pause
+            </Button>
+            <Button variant="outline" size="sm" onClick={abort}>
+              <Square className="mr-1 h-4 w-4" />
+              Stop
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

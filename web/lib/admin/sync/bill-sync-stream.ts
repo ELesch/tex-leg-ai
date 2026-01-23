@@ -65,6 +65,8 @@ export interface SyncOptions {
   sessionCode?: string;
   sessionName?: string;
   batchDelay?: number;
+  syncUntilComplete?: boolean; // Continue until all bill types are exhausted
+  abortSignal?: { aborted: boolean }; // Signal to check for abort/pause
 }
 
 interface BillData {
@@ -306,14 +308,16 @@ async function fetchBillsFromLegislature(
   maxBills: number,
   batchDelay: number,
   billTypes: BillType[],
-  onEvent: EventCallback
+  onEvent: EventCallback,
+  syncUntilComplete: boolean = false,
+  abortSignal?: { aborted: boolean }
 ): Promise<BillData[]> {
   const bills: BillData[] = [];
-  const maxPerType = Math.floor(maxBills / billTypes.length);
+  const maxPerType = syncUntilComplete ? Infinity : Math.floor(maxBills / billTypes.length);
   const maxConsecutiveFailures = 10; // Stop after N consecutive 404s
 
   onEvent('log', {
-    message: `Starting fetch: session=${sessionCode}, maxBills=${maxBills}, types=${billTypes.join(',')}`,
+    message: `Starting fetch: session=${sessionCode}, ${syncUntilComplete ? 'sync until complete' : `maxBills=${maxBills}`}, types=${billTypes.join(',')}`,
     level: 'info',
   } as SyncLogEvent);
 
@@ -329,8 +333,19 @@ async function fetchBillsFromLegislature(
   });
 
   let totalProcessed = 0;
+  let totalFound = 0;
+  const billTypeStatus = new Map<BillType, { exhausted: boolean; lastBillNumber: number }>();
 
   for (const billType of billTypes) {
+    // Check for abort
+    if (abortSignal?.aborted) {
+      onEvent('log', {
+        message: 'Sync stopped by user',
+        level: 'warn',
+      } as SyncLogEvent);
+      break;
+    }
+
     const startNumber = (lastSyncedNumbers.get(billType) || 0) + 1;
 
     onEvent('phase', {
@@ -341,22 +356,45 @@ async function fetchBillsFromLegislature(
     let consecutiveFailures = 0;
     let billsFoundForType = 0;
     let billNumber = startNumber;
+    let typeExhausted = false;
 
     while (billsFoundForType < maxPerType && consecutiveFailures < maxConsecutiveFailures) {
+      // Check for abort
+      if (abortSignal?.aborted) {
+        onEvent('log', {
+          message: 'Sync stopped by user',
+          level: 'warn',
+        } as SyncLogEvent);
+        break;
+      }
+
       totalProcessed++;
 
-      onEvent('progress', {
-        current: totalProcessed,
-        total: maxBills,
-        percent: Math.min(Math.round((totalProcessed / maxBills) * 100), 99),
-        billType,
-      } as SyncProgressEvent);
+      // For sync until complete, show a different progress format
+      if (syncUntilComplete) {
+        onEvent('progress', {
+          current: totalFound,
+          total: totalProcessed,
+          percent: consecutiveFailures > 0
+            ? Math.round(((maxConsecutiveFailures - consecutiveFailures) / maxConsecutiveFailures) * 100)
+            : 100,
+          billType,
+        } as SyncProgressEvent);
+      } else {
+        onEvent('progress', {
+          current: totalProcessed,
+          total: maxBills,
+          percent: Math.min(Math.round((totalProcessed / maxBills) * 100), 99),
+          billType,
+        } as SyncProgressEvent);
+      }
 
       const billData = await fetchBillDetails(sessionCode, billType, billNumber);
 
       if (billData) {
         bills.push(billData);
         billsFoundForType++;
+        totalFound++;
         consecutiveFailures = 0;
 
         if (billsFoundForType % 10 === 0) {
@@ -377,17 +415,34 @@ async function fetchBillsFromLegislature(
       }
     }
 
-    onEvent('log', {
-      message: `Finished ${billType}: found ${billsFoundForType} new bills (checked ${billType} ${startNumber} to ${billNumber - 1})`,
-      level: 'info',
-    } as SyncLogEvent);
-
     if (consecutiveFailures >= maxConsecutiveFailures) {
+      typeExhausted = true;
       onEvent('log', {
-        message: `Stopped ${billType} after ${maxConsecutiveFailures} consecutive missing bills - likely reached end of filed bills`,
+        message: `${billType} complete: reached end of filed bills after ${billsFoundForType} new bills`,
         level: 'info',
       } as SyncLogEvent);
     }
+
+    billTypeStatus.set(billType, {
+      exhausted: typeExhausted,
+      lastBillNumber: billNumber - 1,
+    });
+
+    onEvent('log', {
+      message: `Finished ${billType}: found ${billsFoundForType} new bills (checked ${billType} ${startNumber} to ${billNumber - 1})${typeExhausted ? ' - EXHAUSTED' : ''}`,
+      level: 'info',
+    } as SyncLogEvent);
+  }
+
+  // Report final status
+  if (syncUntilComplete) {
+    const allExhausted = Array.from(billTypeStatus.values()).every(s => s.exhausted);
+    onEvent('log', {
+      message: allExhausted
+        ? 'All bill types have been fully synced'
+        : `Sync stopped - some bill types may have more bills`,
+      level: allExhausted ? 'info' : 'warn',
+    } as SyncLogEvent);
   }
 
   return bills;
@@ -516,6 +571,7 @@ export async function syncBillsWithProgress(
     const maxBills = options.maxBills || defaultMaxBills || 100;
     const batchDelay = options.batchDelay || defaultBatchDelay || 500;
     const billTypes = options.billTypes || ['HB', 'SB'];
+    const syncUntilComplete = options.syncUntilComplete ?? true; // Default to sync until complete
 
     console.log('Sync settings:', {
       sessionCode,
@@ -524,10 +580,12 @@ export async function syncBillsWithProgress(
       batchDelay,
       billTypes,
       syncEnabled,
+      syncUntilComplete,
       fromOptions: {
         sessionCode: options.sessionCode,
         maxBills: options.maxBills,
         billTypes: options.billTypes,
+        syncUntilComplete: options.syncUntilComplete,
       },
       fromDefaults: {
         sessionCode: defaultSessionCode,
@@ -537,7 +595,7 @@ export async function syncBillsWithProgress(
 
     onEvent('phase', {
       phase: 'initializing',
-      message: `Initializing sync for ${sessionName}...`,
+      message: `Initializing ${syncUntilComplete ? 'full' : 'partial'} sync for ${sessionName}...`,
     } as SyncPhaseEvent);
 
     console.log('Starting streaming bill sync...');
@@ -547,7 +605,9 @@ export async function syncBillsWithProgress(
       maxBills,
       batchDelay,
       billTypes as BillType[],
-      onEvent
+      onEvent,
+      syncUntilComplete,
+      options.abortSignal
     );
 
     console.log(`Fetched ${bills.length} bills from legislature`);

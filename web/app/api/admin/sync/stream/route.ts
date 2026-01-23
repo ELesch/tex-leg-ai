@@ -22,12 +22,16 @@ export async function POST(request: NextRequest) {
     options = {
       maxBills: body.maxBills,
       billTypes: body.billTypes as BillType[] | undefined,
+      syncUntilComplete: body.syncUntilComplete,
     };
   } catch {
     // Use defaults
   }
 
   const encoder = new TextEncoder();
+
+  // Create abort signal that can be checked by the sync process
+  const abortSignal = { aborted: false };
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -41,7 +45,7 @@ export async function POST(request: NextRequest) {
       };
 
       try {
-        await syncBillsWithProgress(options, sendEvent);
+        await syncBillsWithProgress({ ...options, abortSignal }, sendEvent);
       } catch (error) {
         console.error('Sync stream error:', error);
         sendEvent('error', {
@@ -50,6 +54,11 @@ export async function POST(request: NextRequest) {
       } finally {
         controller.close();
       }
+    },
+    cancel() {
+      // When the client closes the connection, mark as aborted
+      abortSignal.aborted = true;
+      console.log('Sync stream cancelled by client');
     },
   });
 

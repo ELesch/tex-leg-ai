@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { RefreshCw, Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { RefreshCw, Loader2, CheckCircle, XCircle, Clock, Trash2, AlertTriangle } from 'lucide-react';
 import { useSyncStream } from '@/hooks/use-sync-stream';
 import { SyncProgress } from '@/components/admin/sync-progress';
 
@@ -31,10 +31,12 @@ export default function AdminSyncPage() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const { toast } = useToast();
 
   const syncStream = useSyncStream();
-  const { isConnecting, isSyncing, result, error, startSync, reset } = syncStream;
+  const { isConnecting, isSyncing, isPaused, result, error, startSync, reset } = syncStream;
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -83,12 +85,44 @@ export default function AdminSyncPage() {
 
   const handleStartSync = () => {
     setConfirmOpen(false);
-    startSync();
+    startSync({ syncUntilComplete: true });
   };
 
   const handleRetry = () => {
     reset();
-    startSync();
+    startSync({ syncUntilComplete: true });
+  };
+
+  const handleClearData = async () => {
+    setIsClearing(true);
+    try {
+      const response = await fetch('/api/admin/sync/clear', {
+        method: 'DELETE',
+        headers: {
+          'x-confirm-delete': 'CONFIRM_DELETE_ALL_DATA',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to clear data');
+      }
+
+      const data = await response.json();
+      toast({
+        title: 'Data cleared',
+        description: `Deleted ${data.deleted.bills} bills and related data`,
+      });
+      fetchStatus();
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to clear legislative data',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsClearing(false);
+      setClearConfirmOpen(false);
+    }
   };
 
   const syncing = isConnecting || isSyncing;
@@ -110,39 +144,96 @@ export default function AdminSyncPage() {
             Manage bill synchronization from Texas Legislature
           </p>
         </div>
-        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-          <DialogTrigger asChild>
-            <Button disabled={syncing || !status?.syncEnabled}>
-              {syncing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Trigger Sync
-                </>
-              )}
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Confirm Sync</DialogTitle>
-              <DialogDescription>
-                This will fetch the latest bills from the Texas Legislature website and
-                update the database. This may take several minutes depending on the
-                number of bills.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setConfirmOpen(false)}>
-                Cancel
+        <div className="flex gap-2">
+          {/* Clear Data Button */}
+          <Dialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                disabled={syncing || isPaused || isClearing || !status?.totalBills}
+              >
+                {isClearing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Clearing...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Clear Data
+                  </>
+                )}
               </Button>
-              <Button onClick={handleStartSync}>Start Sync</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-600">
+                  <AlertTriangle className="h-5 w-5" />
+                  Clear All Legislative Data
+                </DialogTitle>
+                <DialogDescription className="space-y-2">
+                  <span className="block">
+                    This will permanently delete all {status?.totalBills} bills and related data
+                    from the database. This action cannot be undone.
+                  </span>
+                  <span className="block font-medium text-red-600">
+                    Are you sure you want to continue?
+                  </span>
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setClearConfirmOpen(false)}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleClearData} disabled={isClearing}>
+                  {isClearing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Clearing...
+                    </>
+                  ) : (
+                    'Delete All Data'
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Sync Button */}
+          <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <DialogTrigger asChild>
+              <Button disabled={syncing || isPaused || !status?.syncEnabled}>
+                {syncing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Start Sync
+                  </>
+                )}
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Start Bill Sync</DialogTitle>
+                <DialogDescription>
+                  This will fetch all new bills from the Texas Legislature website and
+                  update the database. The sync will continue until all bill types have
+                  been fully checked. You can pause or stop the sync at any time.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleStartSync}>Start Sync</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Sync Progress */}
