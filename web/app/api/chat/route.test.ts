@@ -11,7 +11,7 @@ vi.mock('ai', () => ({
 }));
 
 vi.mock('@ai-sdk/openai', () => ({
-  openai: vi.fn(() => ({})),
+  createOpenAI: vi.fn(() => vi.fn(() => ({}))),
 }));
 
 // Mock NextRequest
@@ -122,7 +122,18 @@ describe('POST /api/chat', () => {
         expires: new Date().toISOString(),
       });
 
+      // Mock user AI settings lookup
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+        aiProvider: 'openai',
+        aiModel: 'gpt-4o',
+        aiApiKey: null,
+      } as any);
+
       vi.mocked(prisma.bill.findUnique).mockResolvedValueOnce(mockBill as any);
+
+      // Mock personal notes lookup (empty array)
+      vi.mocked(prisma.personalNote.findMany).mockResolvedValueOnce([]);
+
       vi.mocked(prisma.chatSession.upsert).mockResolvedValueOnce(mockChatSession as any);
       vi.mocked(prisma.chatMessage.create).mockResolvedValueOnce({} as any);
     });
@@ -189,6 +200,14 @@ describe('POST /api/chat', () => {
         expires: new Date().toISOString(),
       });
 
+      // Mock user lookup to succeed
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+        aiProvider: 'openai',
+        aiModel: 'gpt-4o',
+        aiApiKey: null,
+      } as any);
+
+      // Then bill lookup fails
       vi.mocked(prisma.bill.findUnique).mockRejectedValueOnce(new Error('Database error'));
 
       const request = createMockRequest({
@@ -199,7 +218,8 @@ describe('POST /api/chat', () => {
       const response = await POST(request as any);
       expect(response.status).toBe(500);
       const text = await response.text();
-      expect(text).toBe('Internal server error');
+      // Route returns detailed error messages now
+      expect(text).toContain('Database error');
     });
   });
 });
