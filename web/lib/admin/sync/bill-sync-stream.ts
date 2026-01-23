@@ -222,11 +222,21 @@ async function fetchBillDetails(
       return null;
     }
 
+    // Detect if we were redirected to home page (bill doesn't exist)
+    // Valid bill pages have "History for HB/SB XXX" in the title
+    const titleMatch = html.match(/History for (HB|SB)\s*(\d+)/i);
+    if (!titleMatch) {
+      // Not a valid bill page - likely redirected to home page
+      return null;
+    }
+
     // Extract caption from <td id="cellCaptionText">...</td>
     const captionMatch = html.match(/id="cellCaptionText"[^>]*>([^<]+)/i);
-    const description = captionMatch
-      ? captionMatch[1].trim()
-      : `${billType} ${billNumber}`;
+    // If no caption found, this isn't a valid bill page
+    if (!captionMatch) {
+      return null;
+    }
+    const description = captionMatch[1].trim();
 
     // Extract authors from <td id="cellAuthors">Name | Name | Name</td>
     const authorsMatch = html.match(/id="cellAuthors"[^>]*>([^<]+)/i);
