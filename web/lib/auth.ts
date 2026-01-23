@@ -5,6 +5,7 @@ import GoogleProvider from 'next-auth/providers/google';
 import GitHubProvider from 'next-auth/providers/github';
 import bcrypt from 'bcryptjs';
 import { prisma } from './db/prisma';
+import { logAuthEvent } from './logger';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -32,14 +33,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
+          logAuthEvent({ event: 'login_failure', reason: 'missing_credentials' });
           return null;
         }
 
+        const email = credentials.email as string;
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+          where: { email },
         });
 
         if (!user || !user.passwordHash) {
+          logAuthEvent({ event: 'login_failure', email, reason: 'user_not_found' });
           return null;
         }
 
@@ -49,6 +53,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         );
 
         if (!isValid) {
+          logAuthEvent({ event: 'login_failure', email, userId: user.id, reason: 'invalid_password' });
           return null;
         }
 
@@ -57,6 +62,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { id: user.id },
           data: { lastLoginAt: new Date() },
         });
+
+        logAuthEvent({ event: 'login_success', email, userId: user.id });
 
         return {
           id: user.id,

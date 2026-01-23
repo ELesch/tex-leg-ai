@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { hashPassword } from '@/lib/auth';
 import { z } from 'zod';
+import { logAuthEvent, createRequestLogger } from '@/lib/logger';
 
 const registerSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -10,12 +11,17 @@ const registerSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const log = createRequestLogger(request);
+
   try {
     const body = await request.json();
 
     // Validate input
     const result = registerSchema.safeParse(body);
     if (!result.success) {
+      log.warn('Registration validation failed', {
+        errors: result.error.errors.map(e => e.message),
+      });
       return NextResponse.json(
         { error: result.error.errors[0].message },
         { status: 400 }
@@ -30,6 +36,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingUser) {
+      logAuthEvent({ event: 'register_failure', email, reason: 'email_exists' });
       return NextResponse.json(
         { error: 'An account with this email already exists' },
         { status: 409 }
@@ -53,12 +60,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    logAuthEvent({ event: 'register_success', email, userId: user.id });
+
     return NextResponse.json(
       { message: 'Account created successfully', user },
       { status: 201 }
     );
   } catch (error) {
-    console.error('Registration error:', error);
+    log.error('Registration error', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

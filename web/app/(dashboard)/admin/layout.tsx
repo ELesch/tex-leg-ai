@@ -1,6 +1,6 @@
 import { requireAdmin } from '@/lib/admin/require-admin';
 import Link from 'next/link';
-import { Settings, Users, RefreshCw, LayoutDashboard } from 'lucide-react';
+import { Settings, Users, RefreshCw, LayoutDashboard, ScrollText } from 'lucide-react';
 
 const adminNavigation = [
   {
@@ -22,6 +22,11 @@ const adminNavigation = [
     name: 'Bill Sync',
     href: '/admin/sync',
     icon: RefreshCw,
+  },
+  {
+    name: 'Logs',
+    href: '/admin/logs',
+    icon: ScrollText,
   },
 ];
 
