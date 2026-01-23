@@ -23,7 +23,7 @@ const updateAnnotationSchema = z.object({
 // GET /api/bills/[billId]/annotations - List user's annotations for a bill
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ billId: string }> }
+  { params }: { params: { billId: string } }
 ) {
   try {
     const session = await auth();
@@ -31,7 +31,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { billId } = await params;
+    const { billId } = params;
 
     // Find the bill by billId (e.g., "HB 123")
     const bill = await prisma.bill.findUnique({
@@ -65,7 +65,7 @@ export async function GET(
 // POST /api/bills/[billId]/annotations - Create a new annotation
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ billId: string }> }
+  { params }: { params: { billId: string } }
 ) {
   try {
     const session = await auth();
@@ -73,7 +73,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { billId } = await params;
+    const { billId } = params;
     const body = await request.json();
 
     // Validate request body
@@ -123,7 +123,7 @@ export async function POST(
 // PATCH /api/bills/[billId]/annotations - Update an annotation
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ billId: string }> }
+  { params }: { params: { billId: string } }
 ) {
   try {
     const session = await auth();
@@ -131,7 +131,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { billId } = await params;
+    const { billId } = params;
     const body = await request.json();
 
     // Validate request body
@@ -196,7 +196,7 @@ export async function PATCH(
 // DELETE /api/bills/[billId]/annotations - Delete an annotation
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ billId: string }> }
+  { params }: { params: { billId: string } }
 ) {
   try {
     const session = await auth();
@@ -204,7 +204,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { billId } = await params;
+    const { billId } = params;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 

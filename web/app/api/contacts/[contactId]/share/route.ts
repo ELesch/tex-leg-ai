@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db/prisma';
 export const dynamic = 'force-dynamic';
 
 interface RouteParams {
-  params: Promise<{ contactId: string }>;
+  params: { contactId: string };
 }
 
 // POST /api/contacts/[contactId]/share - Share contact with a team
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { contactId } = await params;
+    const { contactId } = params;
 
     // Check ownership
     const contact = await prisma.contact.findFirst({
@@ -118,7 +118,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { contactId } = await params;
+    const { contactId } = params;
     const { searchParams } = new URL(request.url);
     const teamId = searchParams.get('teamId');
 

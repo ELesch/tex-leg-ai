@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/prisma';
 import { getTeamMembership } from '@/lib/teams/permissions';
 
 interface RouteParams {
-  params: Promise<{ teamId: string }>;
+  params: { teamId: string };
 }
 
 // GET /api/teams/[teamId]/activities
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { teamId } = await params;
+    const { teamId } = params;
 
     // Check membership
     const membership = await getTeamMembership(teamId, session.user.id);

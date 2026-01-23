@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db/prisma';
 export const dynamic = 'force-dynamic';
 
 interface RouteParams {
-  params: Promise<{ authorId: string }>;
+  params: { authorId: string };
 }
 
 // GET /api/user-contacts/[authorId]/notes - Get notes for a user's author contact
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { authorId } = await params;
+    const { authorId } = params;
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { authorId } = await params;
+    const { authorId } = params;
 
     // Get or create user contact
     let userContact = await prisma.userContact.findUnique({
@@ -176,7 +176,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { authorId } = await params;
+    const { authorId } = params;
     const body = await request.json();
     const { noteId, content, mentions } = body;
 
@@ -264,7 +264,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { authorId } = await params;
+    const { authorId } = params;
     const { searchParams } = new URL(request.url);
     const noteId = searchParams.get('noteId');
 

@@ -10,7 +10,7 @@ import { GoogleGenAI } from '@google/genai';
 export const maxDuration = 60;
 
 interface RouteParams {
-  params: Promise<{ teamId: string; billId: string }>;
+  params: { teamId: string; billId: string };
 }
 
 // Default models for each provider
@@ -143,7 +143,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return new Response('Unauthorized', { status: 401 });
     }
 
-    const { teamId, billId } = await params;
+    const { teamId, billId } = params;
 
     // Check membership
     const membership = await getTeamMembership(teamId, session.user.id);
@@ -209,7 +209,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return new Response('Unauthorized', { status: 401 });
     }
 
-    const { teamId, billId } = await params;
+    const { teamId, billId } = params;
 
     // Check membership and permissions
     const membership = await getTeamMembership(teamId, session.user.id);

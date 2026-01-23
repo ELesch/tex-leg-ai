@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db/prisma';
 export const dynamic = 'force-dynamic';
 
 interface RouteParams {
-  params: Promise<{ contactId: string }>;
+  params: { contactId: string };
 }
 
 // GET /api/contacts/[contactId] - Get contact details
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { contactId } = await params;
+    const { contactId } = params;
 
     const contact = await prisma.contact.findFirst({
       where: {
@@ -139,7 +139,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { contactId } = await params;
+    const { contactId } = params;
 
     // Check ownership
     const existing = await prisma.contact.findFirst({
@@ -231,7 +231,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { contactId } = await params;
+    const { contactId } = params;
 
     // Check ownership
     const existing = await prisma.contact.findFirst({

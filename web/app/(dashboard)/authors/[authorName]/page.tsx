@@ -16,13 +16,13 @@ import { AuthorPageClient } from './author-page-client';
 import { Chamber } from '@prisma/client';
 
 interface AuthorPageProps {
-  params: Promise<{
+  params: {
     authorName: string;
-  }>;
+  };
 }
 
 export async function generateMetadata({ params }: AuthorPageProps) {
-  const { authorName } = await params;
+  const { authorName } = params;
   const decodedName = decodeURIComponent(authorName);
 
   return {
@@ -43,7 +43,7 @@ function inferChamber(name: string): Chamber | null {
 }
 
 export default async function AuthorPage({ params }: AuthorPageProps) {
-  const { authorName } = await params;
+  const { authorName } = params;
   const decodedName = decodeURIComponent(authorName);
   const session = await auth();
 

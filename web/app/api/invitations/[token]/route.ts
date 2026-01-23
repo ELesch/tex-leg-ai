@@ -3,13 +3,13 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db/prisma';
 
 interface RouteParams {
-  params: Promise<{ token: string }>;
+  params: { token: string };
 }
 
 // GET /api/invitations/[token] - Get invitation details (public)
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const { token } = await params;
+    const { token } = params;
 
     const invitation = await prisma.teamInvitation.findUnique({
       where: { token },
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { token } = await params;
+    const { token } = params;
 
     const invitation = await prisma.teamInvitation.findUnique({
       where: { token },

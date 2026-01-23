@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db/prisma';
 export const dynamic = 'force-dynamic';
 
 interface RouteParams {
-  params: Promise<{ authorId: string }>;
+  params: { authorId: string };
 }
 
 // GET /api/authors/[authorId] - Get author details
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { authorId } = await params;
+    const { authorId } = params;
 
     const author = await prisma.author.findUnique({
       where: { id: authorId },
@@ -116,7 +116,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { authorId } = await params;
+    const { authorId } = params;
 
     // Check if author exists
     const existing = await prisma.author.findUnique({

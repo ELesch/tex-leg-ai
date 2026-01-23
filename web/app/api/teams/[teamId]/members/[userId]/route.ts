@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/prisma';
 import { getTeamMembership, TeamPermissions, ROLE_HIERARCHY } from '@/lib/teams/permissions';
 
 interface RouteParams {
-  params: Promise<{ teamId: string; userId: string }>;
+  params: { teamId: string; userId: string };
 }
 
 // PATCH /api/teams/[teamId]/members/[userId] - Update member role
@@ -15,7 +15,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { teamId, userId: targetUserId } = await params;
+    const { teamId, userId: targetUserId } = params;
 
     // Check current user's membership and permissions
     const currentUserMembership = await getTeamMembership(teamId, session.user.id);
@@ -118,7 +118,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { teamId, userId: targetUserId } = await params;
+    const { teamId, userId: targetUserId } = params;
 
     // Check current user's membership and permissions
     const currentUserMembership = await getTeamMembership(teamId, session.user.id);

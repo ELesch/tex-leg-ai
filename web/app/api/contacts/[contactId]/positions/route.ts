@@ -6,7 +6,7 @@ import { StaffRole } from '@prisma/client';
 export const dynamic = 'force-dynamic';
 
 interface RouteParams {
-  params: Promise<{ contactId: string }>;
+  params: { contactId: string };
 }
 
 // GET /api/contacts/[contactId]/positions - Get staff positions for a contact
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { contactId } = await params;
+    const { contactId } = params;
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get('activeOnly') !== 'false';
 
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { contactId } = await params;
+    const { contactId } = params;
 
     // Check ownership
     const contact = await prisma.contact.findFirst({
@@ -210,7 +210,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { contactId } = await params;
+    const { contactId } = params;
 
     // Check ownership
     const contact = await prisma.contact.findFirst({
@@ -326,7 +326,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { contactId } = await params;
+    const { contactId } = params;
     const { searchParams } = new URL(request.url);
     const positionId = searchParams.get('positionId');
 

@@ -5,7 +5,7 @@ import { getTeamMembership, TeamPermissions } from '@/lib/teams/permissions';
 import { WorkspaceStatus, WorkspacePriority, Prisma } from '@prisma/client';
 
 interface RouteParams {
-  params: Promise<{ teamId: string }>;
+  params: { teamId: string };
 }
 
 // GET /api/teams/[teamId]/workspaces - List team workspaces
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { teamId } = await params;
+    const { teamId } = params;
 
     // Check membership
     const membership = await getTeamMembership(teamId, session.user.id);
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { teamId } = await params;
+    const { teamId } = params;
 
     // Check membership and permissions
     const membership = await getTeamMembership(teamId, session.user.id);

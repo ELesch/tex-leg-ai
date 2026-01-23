@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db/prisma';
 import { z } from 'zod';
 
 interface RouteParams {
-  params: Promise<{ billId: string }>;
+  params: { billId: string };
 }
 
 // Validation schemas
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { billId } = await params;
+    const { billId } = params;
 
     // Find the bill by billId
     const bill = await prisma.bill.findUnique({
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { billId } = await params;
+    const { billId } = params;
 
     // Parse and validate request body
     const body = await request.json();
@@ -122,7 +122,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { billId } = await params;
+    const { billId } = params;
 
     // Parse and validate request body
     const body = await request.json();
@@ -191,7 +191,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { billId } = await params;
+    const { billId } = params;
     const { searchParams } = new URL(request.url);
     const noteId = searchParams.get('id');
 

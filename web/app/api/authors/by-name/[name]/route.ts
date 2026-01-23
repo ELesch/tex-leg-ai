@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db/prisma';
 export const dynamic = 'force-dynamic';
 
 interface RouteParams {
-  params: Promise<{ name: string }>;
+  params: { name: string };
 }
 
 // GET /api/authors/by-name/[name] - Get author by canonical name
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { name } = await params;
+    const { name } = params;
     const decodedName = decodeURIComponent(name);
 
     const author = await prisma.author.findUnique({
