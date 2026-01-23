@@ -8,7 +8,10 @@
  *   billtext/html/house_bills/HB00001_HB00099/HB00001I.HTM
  */
 
-const FTP_BASE_URL = 'https://ftp.legis.state.tx.us';
+import { Client } from 'basic-ftp';
+import { Writable } from 'stream';
+
+const FTP_HOST = 'ftp.legis.state.tx.us';
 
 export interface DirectoryRange {
   start: number;
@@ -44,22 +47,34 @@ function getBillTypePath(billType: string): string {
 }
 
 /**
- * Build the URL for a bill history XML file
+ * Helper class to collect stream data into a string
  */
-export function buildBillXmlUrl(sessionCode: string, billType: string, billNumber: number): string {
-  const range = getDirectoryRange(billType, billNumber);
-  const billTypePath = getBillTypePath(billType);
-  // XML files use format "HB 1.xml" with a space
-  const filename = `${billType} ${billNumber}.xml`;
-  return `${FTP_BASE_URL}/bills/${sessionCode}/billhistory/${billTypePath}/${range.dirname}/${encodeURIComponent(filename)}`;
+class StringWritable extends Writable {
+  private chunks: Buffer[] = [];
+
+  _write(chunk: Buffer, encoding: string, callback: (error?: Error | null) => void): void {
+    this.chunks.push(chunk);
+    callback();
+  }
+
+  toString(): string {
+    return Buffer.concat(this.chunks).toString('utf-8');
+  }
 }
 
 /**
- * Build the URL for a directory listing
+ * Create and connect an FTP client
  */
-export function buildDirectoryListUrl(sessionCode: string, billType: string): string {
-  const billTypePath = getBillTypePath(billType);
-  return `${FTP_BASE_URL}/bills/${sessionCode}/billhistory/${billTypePath}/`;
+async function createFtpClient(): Promise<Client> {
+  const client = new Client();
+  client.ftp.verbose = false;
+
+  await client.access({
+    host: FTP_HOST,
+    secure: false,
+  });
+
+  return client;
 }
 
 /**
@@ -71,72 +86,47 @@ export async function fetchBillXml(
   billType: string,
   billNumber: number
 ): Promise<string | null> {
-  const url = buildBillXmlUrl(sessionCode, billType, billNumber);
+  const client = new Client();
+  client.ftp.verbose = false;
 
   try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'TxLegAI Bill Sync Bot (educational/research)',
-      },
+    await client.access({
+      host: FTP_HOST,
+      secure: false,
     });
 
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null; // Bill doesn't exist
+    const range = getDirectoryRange(billType, billNumber);
+    const billTypePath = getBillTypePath(billType);
+    const filename = `${billType} ${billNumber}.xml`;
+    const remotePath = `/bills/${sessionCode}/billhistory/${billTypePath}/${range.dirname}/${filename}`;
+
+    const writable = new StringWritable();
+
+    try {
+      await client.downloadTo(writable, remotePath);
+      const xml = writable.toString();
+
+      // Verify it's actually XML
+      if (!xml.includes('<?xml') && !xml.includes('<billhistory') && !xml.includes('<BillHistory')) {
+        console.error(`Invalid XML response for ${billType} ${billNumber}`);
+        return null;
       }
-      console.error(`FTP fetch failed for ${billType} ${billNumber}: ${response.status}`);
-      return null;
+
+      return xml;
+    } catch (err: unknown) {
+      // File not found is expected for non-existent bills
+      const error = err as { code?: number };
+      if (error.code === 550) {
+        return null; // File not found
+      }
+      throw err;
     }
-
-    const xml = await response.text();
-
-    // Verify it's actually XML (not an error page)
-    if (!xml.includes('<?xml') && !xml.includes('<billhistory')) {
-      console.error(`Invalid XML response for ${billType} ${billNumber}`);
-      return null;
-    }
-
-    return xml;
   } catch (error) {
     console.error(`Error fetching ${billType} ${billNumber}:`, error);
     return null;
+  } finally {
+    client.close();
   }
-}
-
-/**
- * Parse directory listing HTML to extract subdirectory names
- * Returns an array of directory names like ["HB00001_HB00099", "HB00100_HB00199", ...]
- */
-function parseDirectoryListing(html: string): string[] {
-  const dirs: string[] = [];
-  // Look for links to directories like HB00001_HB00099/
-  const pattern = /href="([A-Z]{2,3}\d{5}_[A-Z]{2,3}\d{5})\/"/gi;
-  let match;
-  while ((match = pattern.exec(html)) !== null) {
-    dirs.push(match[1]);
-  }
-  return dirs.sort();
-}
-
-/**
- * Parse directory listing HTML to extract XML filenames
- * Returns an array of filenames like ["HB 1.xml", "HB 2.xml", ...]
- */
-function parseFileListing(html: string): string[] {
-  const files: string[] = [];
-  // Look for links to XML files like "HB 1.xml" or "SB 123.xml"
-  const pattern = /href="([A-Z]{2,3}%20\d+\.xml)"/gi;
-  let match;
-  while ((match = pattern.exec(html)) !== null) {
-    // Decode URL-encoded filename
-    files.push(decodeURIComponent(match[1]));
-  }
-  return files.sort((a, b) => {
-    // Sort by bill number
-    const numA = parseInt(a.match(/\d+/)?.[0] || '0');
-    const numB = parseInt(b.match(/\d+/)?.[0] || '0');
-    return numA - numB;
-  });
 }
 
 /**
@@ -147,25 +137,33 @@ export async function listBillDirectories(
   sessionCode: string,
   billType: string
 ): Promise<string[]> {
-  const url = buildDirectoryListUrl(sessionCode, billType);
+  const client = new Client();
+  client.ftp.verbose = false;
 
   try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'TxLegAI Bill Sync Bot (educational/research)',
-      },
+    await client.access({
+      host: FTP_HOST,
+      secure: false,
     });
 
-    if (!response.ok) {
-      console.error(`Failed to list directories for ${billType}: ${response.status}`);
-      return [];
-    }
+    const billTypePath = getBillTypePath(billType);
+    const remotePath = `/bills/${sessionCode}/billhistory/${billTypePath}`;
 
-    const html = await response.text();
-    return parseDirectoryListing(html);
+    const list = await client.list(remotePath);
+
+    // Filter to directories matching the pattern HB00001_HB00099
+    const pattern = new RegExp(`^${billType}\\d{5}_${billType}\\d{5}$`);
+    const dirs = list
+      .filter(item => item.isDirectory && pattern.test(item.name))
+      .map(item => item.name)
+      .sort();
+
+    return dirs;
   } catch (error) {
     console.error(`Error listing directories for ${billType}:`, error);
     return [];
+  } finally {
+    client.close();
   }
 }
 
@@ -178,26 +176,37 @@ export async function listBillFiles(
   billType: string,
   dirRange: string
 ): Promise<string[]> {
-  const billTypePath = getBillTypePath(billType);
-  const url = `${FTP_BASE_URL}/bills/${sessionCode}/billhistory/${billTypePath}/${dirRange}/`;
+  const client = new Client();
+  client.ftp.verbose = false;
 
   try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'TxLegAI Bill Sync Bot (educational/research)',
-      },
+    await client.access({
+      host: FTP_HOST,
+      secure: false,
     });
 
-    if (!response.ok) {
-      console.error(`Failed to list files in ${dirRange}: ${response.status}`);
-      return [];
-    }
+    const billTypePath = getBillTypePath(billType);
+    const remotePath = `/bills/${sessionCode}/billhistory/${billTypePath}/${dirRange}`;
 
-    const html = await response.text();
-    return parseFileListing(html);
+    const list = await client.list(remotePath);
+
+    // Filter to XML files
+    const files = list
+      .filter(item => !item.isDirectory && item.name.endsWith('.xml'))
+      .map(item => item.name)
+      .sort((a, b) => {
+        // Sort by bill number
+        const numA = parseInt(a.match(/\d+/)?.[0] || '0');
+        const numB = parseInt(b.match(/\d+/)?.[0] || '0');
+        return numA - numB;
+      });
+
+    return files;
   } catch (error) {
     console.error(`Error listing files in ${dirRange}:`, error);
     return [];
+  } finally {
+    client.close();
   }
 }
 
@@ -210,24 +219,51 @@ export async function scanAvailableBills(
   billType: string
 ): Promise<number[]> {
   const billNumbers: number[] = [];
+  const client = new Client();
+  client.ftp.verbose = false;
 
-  // Get all directory ranges
-  const directories = await listBillDirectories(sessionCode, billType);
+  try {
+    await client.access({
+      host: FTP_HOST,
+      secure: false,
+    });
 
-  for (const dir of directories) {
-    // Get all XML files in this directory
-    const files = await listBillFiles(sessionCode, billType, dir);
+    const billTypePath = getBillTypePath(billType);
+    const basePath = `/bills/${sessionCode}/billhistory/${billTypePath}`;
 
-    // Extract bill numbers from filenames
-    for (const filename of files) {
-      const match = filename.match(/\d+/);
-      if (match) {
-        billNumbers.push(parseInt(match[0]));
+    // Get all directory ranges
+    const dirList = await client.list(basePath);
+    const pattern = new RegExp(`^${billType}\\d{5}_${billType}\\d{5}$`);
+    const directories = dirList
+      .filter(item => item.isDirectory && pattern.test(item.name))
+      .map(item => item.name)
+      .sort();
+
+    // Get files from each directory
+    for (const dir of directories) {
+      try {
+        const fileList = await client.list(`${basePath}/${dir}`);
+
+        for (const file of fileList) {
+          if (!file.isDirectory && file.name.endsWith('.xml')) {
+            const match = file.name.match(/\d+/);
+            if (match) {
+              billNumbers.push(parseInt(match[0]));
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`Error listing files in ${dir}:`, err);
       }
     }
-  }
 
-  return billNumbers.sort((a, b) => a - b);
+    return billNumbers.sort((a, b) => a - b);
+  } catch (error) {
+    console.error(`Error scanning bills for ${billType}:`, error);
+    return [];
+  } finally {
+    client.close();
+  }
 }
 
 /**
