@@ -246,11 +246,33 @@ async function fetchBillText(
         .replace(/<br\s*\/?>/gi, '\n')
         .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
         .replace(/<[^>]+>/g, '')
+        // Decode numeric HTML entities (&#xxx; and &#xXXX;)
+        .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
+        .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)))
+        // Decode common named HTML entities
         .replace(/&nbsp;/g, ' ')
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&mdash;/g, '—')
+        .replace(/&ndash;/g, '–')
+        .replace(/&rsquo;/g, "'")
+        .replace(/&lsquo;/g, "'")
+        .replace(/&rdquo;/g, '"')
+        .replace(/&ldquo;/g, '"')
+        .replace(/&sect;/g, '§')
+        .replace(/&para;/g, '¶')
+        .replace(/&copy;/g, '©')
+        .replace(/&reg;/g, '®')
+        .replace(/&deg;/g, '°')
+        .replace(/&frac12;/g, '½')
+        .replace(/&frac14;/g, '¼')
+        .replace(/&frac34;/g, '¾')
+        .replace(/&hellip;/g, '…')
+        .replace(/&bull;/g, '•')
+        .replace(/&middot;/g, '·')
         .replace(/\r\n/g, '\n')
         .replace(/[ \t]+/g, ' ')
         .replace(/\n +/g, '\n')
@@ -511,6 +533,16 @@ export async function processSyncBatch(jobId: string): Promise<BatchResult> {
   // Check if all types are now completed
   const allCompleted = job.billTypes.every((type) => completedTypes[type]);
 
+  // Re-check current job status to avoid overwriting PAUSED/STOPPED
+  const currentJobStatus = await prisma.syncJob.findUnique({
+    where: { id: jobId },
+    select: { status: true },
+  });
+
+  // Only update status if job is still RUNNING (don't overwrite PAUSED/STOPPED)
+  const shouldUpdateStatus = currentJobStatus?.status === 'RUNNING';
+  const newStatus = allCompleted ? 'COMPLETED' : (shouldUpdateStatus ? 'RUNNING' : undefined);
+
   // Update job state
   await prisma.syncJob.update({
     where: { id: jobId },
@@ -522,8 +554,8 @@ export async function processSyncBatch(jobId: string): Promise<BatchResult> {
       totalUpdated: job.totalUpdated + updated,
       totalErrors: job.totalErrors + errors,
       lastActivityAt: new Date(),
-      status: allCompleted ? 'COMPLETED' : 'RUNNING',
-      completedAt: allCompleted ? new Date() : null,
+      ...(newStatus && { status: newStatus }),
+      ...(allCompleted && { completedAt: new Date() }),
     },
   });
 

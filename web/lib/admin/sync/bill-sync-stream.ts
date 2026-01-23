@@ -167,6 +167,15 @@ async function fetchBillText(
         .replace(/&#162;/g, '¢')
         .replace(/&copy;/g, '©')
         .replace(/&#169;/g, '©')
+        .replace(/&reg;/g, '®')
+        .replace(/&frac12;/g, '½')
+        .replace(/&frac14;/g, '¼')
+        .replace(/&frac34;/g, '¾')
+        .replace(/&bull;/g, '•')
+        .replace(/&middot;/g, '·')
+        // Generic numeric entity decoder for any remaining entities
+        .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
+        .replace(/&#x([0-9a-fA-F]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
         // Clean up whitespace
         .replace(/\r\n/g, '\n')
         .replace(/[ \t]+/g, ' ')
