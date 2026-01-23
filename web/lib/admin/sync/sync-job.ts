@@ -3,6 +3,7 @@ import { BillType, SyncJobStatus } from '@prisma/client';
 import { getSettingTyped, getSetting } from '@/lib/admin/settings';
 import { fetchBillXml, fetchBillTextFromUrl, scanAvailableBills } from './ftp-client';
 import { parseBillXml, ParsedBill } from './xml-parser';
+import { logger } from '@/lib/logger';
 
 // Number of bills to process per batch (keep under Vercel timeout)
 const BATCH_SIZE = 20;
@@ -288,14 +289,18 @@ async function fetchBillFromFtp(
     // Parse XML
     const parsed = parseBillXml(xml);
     if (!parsed) {
-      console.error(`Failed to parse XML for ${billType} ${billNumber}`);
+      logger.error('Failed to parse XML', { billType, billNumber });
       return null;
     }
 
     // Convert to BillData format and fetch bill text
     return await convertParsedBillToBillData(parsed);
   } catch (error) {
-    console.error(`Error fetching ${billType} ${billNumber} from FTP:`, error);
+    logger.error('Error fetching bill from FTP', {
+      billType,
+      billNumber,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return null;
   }
 }
@@ -359,7 +364,10 @@ async function saveBill(
       return 'created';
     }
   } catch (error) {
-    console.error(`Error saving ${bill.billId}:`, error);
+    logger.error('Error saving bill', {
+      billId: bill.billId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return 'error';
   }
 }
@@ -374,10 +382,10 @@ async function getAvailableBills(
   const cacheKey = `${sessionCode}-${billType}`;
 
   if (!availableBillsCache.has(cacheKey)) {
-    console.log(`Scanning available ${billType} bills from FTP...`);
+    logger.info('Scanning available bills from FTP', { billType });
     const bills = await scanAvailableBills(sessionCode, billType);
     availableBillsCache.set(cacheKey, bills);
-    console.log(`Found ${bills.length} ${billType} bills`);
+    logger.info('Found bills on FTP', { billType, count: bills.length });
   }
 
   return availableBillsCache.get(cacheKey) || [];

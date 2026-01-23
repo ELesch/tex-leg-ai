@@ -10,6 +10,7 @@
 
 import { Client } from 'basic-ftp';
 import { Writable } from 'stream';
+import { logger } from '@/lib/logger';
 
 const FTP_HOST = 'ftp.legis.state.tx.us';
 
@@ -108,7 +109,7 @@ export async function fetchBillXml(
 
       // Verify it's actually XML
       if (!xml.includes('<?xml') && !xml.includes('<billhistory') && !xml.includes('<BillHistory')) {
-        console.error(`Invalid XML response for ${billType} ${billNumber}`);
+        logger.error('Invalid XML response', { billType, billNumber });
         return null;
       }
 
@@ -122,7 +123,11 @@ export async function fetchBillXml(
       throw err;
     }
   } catch (error) {
-    console.error(`Error fetching ${billType} ${billNumber}:`, error);
+    logger.error('Error fetching bill XML from FTP', {
+      billType,
+      billNumber,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return null;
   } finally {
     client.close();
@@ -160,7 +165,10 @@ export async function listBillDirectories(
 
     return dirs;
   } catch (error) {
-    console.error(`Error listing directories for ${billType}:`, error);
+    logger.error('Error listing FTP directories', {
+      billType,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return [];
   } finally {
     client.close();
@@ -203,7 +211,10 @@ export async function listBillFiles(
 
     return files;
   } catch (error) {
-    console.error(`Error listing files in ${dirRange}:`, error);
+    logger.error('Error listing FTP files', {
+      dirRange,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return [];
   } finally {
     client.close();
@@ -253,13 +264,19 @@ export async function scanAvailableBills(
           }
         }
       } catch (err) {
-        console.error(`Error listing files in ${dir}:`, err);
+        logger.error('Error listing FTP directory files', {
+          dir,
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
       }
     }
 
     return billNumbers.sort((a, b) => a - b);
   } catch (error) {
-    console.error(`Error scanning bills for ${billType}:`, error);
+    logger.error('Error scanning bills on FTP', {
+      billType,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return [];
   } finally {
     client.close();
@@ -359,7 +376,10 @@ export async function fetchBillTextFromUrl(url: string): Promise<string | null> 
 
     return null;
   } catch (error) {
-    console.error(`Error fetching bill text from ${url}:`, error);
+    logger.error('Error fetching bill text from URL', {
+      url,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return null;
   }
 }

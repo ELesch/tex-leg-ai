@@ -3,6 +3,7 @@ import { BillType } from '@prisma/client';
 import { getSettingTyped, getSetting } from '@/lib/admin/settings';
 import { fetchBillXml, fetchBillTextFromUrl, scanAvailableBills } from './ftp-client';
 import { parseBillXml, ParsedBill } from './xml-parser';
+import { logger } from '@/lib/logger';
 
 // Event types for progress reporting
 export type SyncEventType = 'phase' | 'progress' | 'bill' | 'complete' | 'error' | 'log';
@@ -153,14 +154,18 @@ async function fetchBillFromFtp(
     // Parse XML
     const parsed = parseBillXml(xml);
     if (!parsed) {
-      console.error(`Failed to parse XML for ${billType} ${billNumber}`);
+      logger.error('Failed to parse XML', { billType, billNumber });
       return null;
     }
 
     // Convert to BillData format and fetch bill text
     return await convertParsedBillToBillData(parsed);
   } catch (error) {
-    console.error(`Error fetching ${billType} ${billNumber} from FTP:`, error);
+    logger.error('Error fetching bill from FTP', {
+      billType,
+      billNumber,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return null;
   }
 }
@@ -245,7 +250,10 @@ async function saveBillToDatabase(
       return 'created';
     }
   } catch (error) {
-    console.error(`Error saving ${bill.billId}:`, error);
+    logger.error('Error saving bill', {
+      billId: bill.billId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return 'error';
   }
 }
@@ -486,7 +494,7 @@ export async function syncBillsWithProgress(
     const billTypes = options.billTypes || ['HB', 'SB'];
     const syncUntilComplete = options.syncUntilComplete ?? true; // Default to sync until complete
 
-    console.log('Sync settings:', {
+    logger.info('Sync settings', {
       sessionCode,
       sessionName,
       maxBills,
@@ -494,16 +502,6 @@ export async function syncBillsWithProgress(
       billTypes,
       syncEnabled,
       syncUntilComplete,
-      fromOptions: {
-        sessionCode: options.sessionCode,
-        maxBills: options.maxBills,
-        billTypes: options.billTypes,
-        syncUntilComplete: options.syncUntilComplete,
-      },
-      fromDefaults: {
-        sessionCode: defaultSessionCode,
-        maxBills: defaultMaxBills,
-      },
     });
 
     onEvent('phase', {
@@ -511,7 +509,7 @@ export async function syncBillsWithProgress(
       message: `Initializing ${syncUntilComplete ? 'full' : 'partial'} FTP sync for ${sessionName}...`,
     } as SyncPhaseEvent);
 
-    console.log('Starting FTP-based streaming bill sync...');
+    logger.info('Starting FTP-based streaming bill sync');
 
     // Fetch and process bills immediately (each bill saved right after fetching)
     const result = await fetchAndProcessBills(
@@ -543,12 +541,15 @@ export async function syncBillsWithProgress(
       },
     } as SyncCompleteEvent);
 
-    console.log('Sync complete:', {
+    logger.info('Sync complete', {
       ...result,
-      duration: `${duration}ms`,
+      duration,
     });
   } catch (error) {
-    console.error('Sync failed:', error);
+    logger.error('Sync failed', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     onEvent('error', {
       message: error instanceof Error ? error.message : 'Unknown error',
       details: error instanceof Error ? error.stack : undefined,
