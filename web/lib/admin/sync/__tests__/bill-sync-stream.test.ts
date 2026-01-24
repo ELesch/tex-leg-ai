@@ -31,6 +31,7 @@ vi.mock('../ftp-client', () => ({
   fetchBillXml: vi.fn(),
   fetchBillTextFromUrl: vi.fn(),
   scanAvailableBills: vi.fn(),
+  closeSharedClient: vi.fn(),
 }));
 
 vi.mock('../xml-parser', () => ({
@@ -39,7 +40,7 @@ vi.mock('../xml-parser', () => ({
 
 import { prisma } from '@/lib/db/prisma';
 import { getSetting, getSettingTyped } from '@/lib/admin/settings';
-import { fetchBillXml, fetchBillTextFromUrl, scanAvailableBills } from '../ftp-client';
+import { fetchBillXml, fetchBillTextFromUrl, scanAvailableBills, closeSharedClient } from '../ftp-client';
 import { parseBillXml } from '../xml-parser';
 import {
   syncBillsWithProgress,
@@ -198,7 +199,7 @@ describe('Bill Sync Stream', () => {
     describe('bill processing', () => {
       it('emits processing_bills phase', async () => {
         (scanAvailableBills as Mock).mockResolvedValue([1]);
-        (fetchBillXml as Mock).mockResolvedValue('<xml>test</xml>');
+        (fetchBillXml as Mock).mockResolvedValue({ xml: '<xml>test</xml>', notFound: false, error: false });
         (parseBillXml as Mock).mockReturnValue(mockParsedBill);
         (fetchBillTextFromUrl as Mock).mockResolvedValue('Bill text content');
 
@@ -212,7 +213,7 @@ describe('Bill Sync Stream', () => {
 
       it('emits progress events during processing', async () => {
         (scanAvailableBills as Mock).mockResolvedValue([1, 2, 3]);
-        (fetchBillXml as Mock).mockResolvedValue('<xml>test</xml>');
+        (fetchBillXml as Mock).mockResolvedValue({ xml: '<xml>test</xml>', notFound: false, error: false });
         (parseBillXml as Mock).mockReturnValue(mockParsedBill);
         (fetchBillTextFromUrl as Mock).mockResolvedValue('Bill text content');
 
@@ -226,7 +227,7 @@ describe('Bill Sync Stream', () => {
 
       it('emits bill event for each processed bill', async () => {
         (scanAvailableBills as Mock).mockResolvedValue([1]);
-        (fetchBillXml as Mock).mockResolvedValue('<xml>test</xml>');
+        (fetchBillXml as Mock).mockResolvedValue({ xml: '<xml>test</xml>', notFound: false, error: false });
         (parseBillXml as Mock).mockReturnValue(mockParsedBill);
         (fetchBillTextFromUrl as Mock).mockResolvedValue('Bill text content');
 
@@ -240,7 +241,7 @@ describe('Bill Sync Stream', () => {
 
       it('creates new bills in database', async () => {
         (scanAvailableBills as Mock).mockResolvedValue([1]);
-        (fetchBillXml as Mock).mockResolvedValue('<xml>test</xml>');
+        (fetchBillXml as Mock).mockResolvedValue({ xml: '<xml>test</xml>', notFound: false, error: false });
         (parseBillXml as Mock).mockReturnValue(mockParsedBill);
         (fetchBillTextFromUrl as Mock).mockResolvedValue('Bill text content');
         (prisma.bill.findUnique as Mock).mockResolvedValue(null);
@@ -260,7 +261,7 @@ describe('Bill Sync Stream', () => {
 
       it('updates existing bills in database', async () => {
         (scanAvailableBills as Mock).mockResolvedValue([1]);
-        (fetchBillXml as Mock).mockResolvedValue('<xml>test</xml>');
+        (fetchBillXml as Mock).mockResolvedValue({ xml: '<xml>test</xml>', notFound: false, error: false });
         (parseBillXml as Mock).mockReturnValue(mockParsedBill);
         (fetchBillTextFromUrl as Mock).mockResolvedValue('Bill text content');
         (prisma.bill.findUnique as Mock).mockResolvedValue({ id: 'existing-bill' });
@@ -280,7 +281,7 @@ describe('Bill Sync Stream', () => {
 
       it('handles FTP fetch failures gracefully', async () => {
         (scanAvailableBills as Mock).mockResolvedValue([1]);
-        (fetchBillXml as Mock).mockResolvedValue(null);
+        (fetchBillXml as Mock).mockResolvedValue({ xml: null, notFound: false, error: true });
 
         await syncBillsWithProgress({ maxBills: 1 }, eventCallback);
 
@@ -291,7 +292,7 @@ describe('Bill Sync Stream', () => {
 
       it('handles XML parse failures gracefully', async () => {
         (scanAvailableBills as Mock).mockResolvedValue([1]);
-        (fetchBillXml as Mock).mockResolvedValue('<xml>invalid</xml>');
+        (fetchBillXml as Mock).mockResolvedValue({ xml: '<xml>invalid</xml>', notFound: false, error: false });
         (parseBillXml as Mock).mockReturnValue(null);
 
         await syncBillsWithProgress({ maxBills: 1 }, eventCallback);
@@ -315,7 +316,7 @@ describe('Bill Sync Stream', () => {
 
       it('emits complete event with summary', async () => {
         (scanAvailableBills as Mock).mockResolvedValue([1, 2]);
-        (fetchBillXml as Mock).mockResolvedValue('<xml>test</xml>');
+        (fetchBillXml as Mock).mockResolvedValue({ xml: '<xml>test</xml>', notFound: false, error: false });
         (parseBillXml as Mock).mockReturnValue(mockParsedBill);
         (fetchBillTextFromUrl as Mock).mockResolvedValue('Bill text');
         (prisma.bill.findUnique as Mock)
@@ -335,8 +336,8 @@ describe('Bill Sync Stream', () => {
       it('includes error count in summary', async () => {
         (scanAvailableBills as Mock).mockResolvedValue([1, 2]);
         (fetchBillXml as Mock)
-          .mockResolvedValueOnce('<xml>test</xml>')
-          .mockResolvedValueOnce(null); // Fail second bill
+          .mockResolvedValueOnce({ xml: '<xml>test</xml>', notFound: false, error: false })
+          .mockResolvedValueOnce({ xml: null, notFound: false, error: true }); // Fail second bill
         (parseBillXml as Mock).mockReturnValue(mockParsedBill);
         (fetchBillTextFromUrl as Mock).mockResolvedValue('Bill text');
 
@@ -369,7 +370,7 @@ describe('Bill Sync Stream', () => {
           if (callCount >= 2) {
             abortSignal.aborted = true;
           }
-          return Promise.resolve('<xml>test</xml>');
+          return Promise.resolve({ xml: '<xml>test</xml>', notFound: false, error: false });
         });
         (parseBillXml as Mock).mockReturnValue(mockParsedBill);
         (fetchBillTextFromUrl as Mock).mockResolvedValue('Bill text');
@@ -385,10 +386,11 @@ describe('Bill Sync Stream', () => {
     });
 
     describe('rate limiting', () => {
-      it('applies rate limiting delay every 5 requests', async () => {
+      it('applies rate limiting delay every 10 requests', async () => {
         const startTime = Date.now();
-        (scanAvailableBills as Mock).mockResolvedValue([1, 2, 3, 4, 5, 6]);
-        (fetchBillXml as Mock).mockResolvedValue('<xml>test</xml>');
+        // Need 11+ bills to trigger the delay at the 10th bill
+        (scanAvailableBills as Mock).mockResolvedValue([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+        (fetchBillXml as Mock).mockResolvedValue({ xml: '<xml>test</xml>', notFound: false, error: false });
         (parseBillXml as Mock).mockReturnValue(mockParsedBill);
         (fetchBillTextFromUrl as Mock).mockResolvedValue('Bill text');
         (getSettingTyped as Mock).mockImplementation((key: string) => {
@@ -397,10 +399,10 @@ describe('Bill Sync Stream', () => {
           return Promise.resolve(null);
         });
 
-        await syncBillsWithProgress({ maxBills: 6, syncUntilComplete: false }, eventCallback);
+        await syncBillsWithProgress({ maxBills: 11, syncUntilComplete: false }, eventCallback);
 
         const duration = Date.now() - startTime;
-        // Should have at least one delay of 10ms after 5 bills
+        // Should have at least one delay of 10ms after 10 bills
         expect(duration).toBeGreaterThanOrEqual(10);
       });
     });

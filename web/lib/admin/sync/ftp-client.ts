@@ -14,6 +14,59 @@ import { logger } from '@/lib/logger';
 
 const FTP_HOST = 'ftp.legis.state.tx.us';
 
+// Shared FTP client for connection reuse
+let sharedClient: Client | null = null;
+let clientLastUsed: number = 0;
+const CLIENT_TIMEOUT_MS = 60000; // Close idle connections after 60 seconds
+
+/**
+ * Get or create a shared FTP client for connection reuse
+ */
+async function getSharedClient(): Promise<Client> {
+  const now = Date.now();
+
+  // If we have a client and it's been used recently, try to reuse it
+  if (sharedClient && (now - clientLastUsed) < CLIENT_TIMEOUT_MS) {
+    clientLastUsed = now;
+    return sharedClient;
+  }
+
+  // Close old client if it exists
+  if (sharedClient) {
+    try {
+      sharedClient.close();
+    } catch {
+      // Ignore close errors
+    }
+  }
+
+  // Create new client
+  sharedClient = new Client();
+  sharedClient.ftp.verbose = false;
+
+  await sharedClient.access({
+    host: FTP_HOST,
+    secure: false,
+  });
+
+  clientLastUsed = now;
+  return sharedClient;
+}
+
+/**
+ * Close the shared FTP client (call when done syncing)
+ */
+export function closeSharedClient(): void {
+  if (sharedClient) {
+    try {
+      sharedClient.close();
+    } catch {
+      // Ignore close errors
+    }
+    sharedClient = null;
+  }
+}
+
 export interface DirectoryRange {
   start: number;
   end: number;
@@ -78,23 +131,23 @@ async function createFtpClient(): Promise<Client> {
   return client;
 }
 
+export interface FetchBillResult {
+  xml: string | null;
+  notFound: boolean;  // true if bill doesn't exist (not an error)
+  error: boolean;     // true if there was an actual error
+}
+
 /**
  * Fetch bill XML content from FTP server
- * Returns null if bill doesn't exist
+ * Returns result indicating success, not found, or error
  */
 export async function fetchBillXml(
   sessionCode: string,
   billType: string,
   billNumber: number
-): Promise<string | null> {
-  const client = new Client();
-  client.ftp.verbose = false;
-
+): Promise<FetchBillResult> {
   try {
-    await client.access({
-      host: FTP_HOST,
-      secure: false,
-    });
+    const client = await getSharedClient();
 
     const range = getDirectoryRange(billType, billNumber);
     const billTypePath = getBillTypePath(billType);
@@ -110,15 +163,15 @@ export async function fetchBillXml(
       // Verify it's actually XML
       if (!xml.includes('<?xml') && !xml.includes('<billhistory') && !xml.includes('<BillHistory')) {
         logger.error('Invalid XML response', { billType, billNumber });
-        return null;
+        return { xml: null, notFound: false, error: true };
       }
 
-      return xml;
+      return { xml, notFound: false, error: false };
     } catch (err: unknown) {
       // File not found is expected for non-existent bills
       const error = err as { code?: number };
       if (error.code === 550) {
-        return null; // File not found
+        return { xml: null, notFound: true, error: false }; // File not found - not an error
       }
       throw err;
     }
@@ -128,9 +181,9 @@ export async function fetchBillXml(
       billNumber,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
-    return null;
-  } finally {
-    client.close();
+    // Reset shared client on error so next request creates a fresh connection
+    closeSharedClient();
+    return { xml: null, notFound: false, error: true };
   }
 }
 
@@ -142,14 +195,8 @@ export async function listBillDirectories(
   sessionCode: string,
   billType: string
 ): Promise<string[]> {
-  const client = new Client();
-  client.ftp.verbose = false;
-
   try {
-    await client.access({
-      host: FTP_HOST,
-      secure: false,
-    });
+    const client = await getSharedClient();
 
     const billTypePath = getBillTypePath(billType);
     const remotePath = `/bills/${sessionCode}/billhistory/${billTypePath}`;
@@ -169,9 +216,8 @@ export async function listBillDirectories(
       billType,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
+    closeSharedClient();
     return [];
-  } finally {
-    client.close();
   }
 }
 
@@ -184,14 +230,8 @@ export async function listBillFiles(
   billType: string,
   dirRange: string
 ): Promise<string[]> {
-  const client = new Client();
-  client.ftp.verbose = false;
-
   try {
-    await client.access({
-      host: FTP_HOST,
-      secure: false,
-    });
+    const client = await getSharedClient();
 
     const billTypePath = getBillTypePath(billType);
     const remotePath = `/bills/${sessionCode}/billhistory/${billTypePath}/${dirRange}`;
@@ -215,9 +255,8 @@ export async function listBillFiles(
       dirRange,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
+    closeSharedClient();
     return [];
-  } finally {
-    client.close();
   }
 }
 
@@ -230,14 +269,9 @@ export async function scanAvailableBills(
   billType: string
 ): Promise<number[]> {
   const billNumbers: number[] = [];
-  const client = new Client();
-  client.ftp.verbose = false;
 
   try {
-    await client.access({
-      host: FTP_HOST,
-      secure: false,
-    });
+    const client = await getSharedClient();
 
     const billTypePath = getBillTypePath(billType);
     const basePath = `/bills/${sessionCode}/billhistory/${billTypePath}`;
@@ -277,9 +311,8 @@ export async function scanAvailableBills(
       billType,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
+    closeSharedClient();
     return [];
-  } finally {
-    client.close();
   }
 }
 

@@ -37,6 +37,7 @@ vi.mock('../ftp-client', () => ({
   fetchBillXml: vi.fn(),
   fetchBillTextFromUrl: vi.fn(),
   scanAvailableBills: vi.fn(),
+  closeSharedClient: vi.fn(),
 }));
 
 vi.mock('../xml-parser', () => ({
@@ -361,7 +362,7 @@ describe('processSyncBatch', () => {
       .mockResolvedValueOnce(mockSyncJob);
     (prisma.legislatureSession.upsert as Mock).mockResolvedValue(mockSession);
     (scanAvailableBills as Mock).mockResolvedValue([1, 2, 3]);
-    (fetchBillXml as Mock).mockResolvedValue('<billhistory bill="89(R) HB 1"><caption>Test</caption><authors>Test</authors></billhistory>');
+    (fetchBillXml as Mock).mockResolvedValue({ xml: '<billhistory bill="89(R) HB 1"><caption>Test</caption><authors>Test</authors></billhistory>', notFound: false, error: false });
     (parseBillXml as Mock).mockReturnValue({
       billId: 'HB 1',
       billType: 'HB',
@@ -444,7 +445,7 @@ describe('processSyncBatch', () => {
       .mockResolvedValueOnce(mockSyncJob);
     (prisma.legislatureSession.upsert as Mock).mockResolvedValue(mockSession);
     (scanAvailableBills as Mock).mockResolvedValue([1]);
-    (fetchBillXml as Mock).mockResolvedValue(null);
+    (fetchBillXml as Mock).mockResolvedValue({ xml: null, notFound: false, error: true });
     (prisma.syncJob.update as Mock).mockResolvedValue(mockSyncJob);
 
     const result = await processSyncBatch('job-123');
@@ -461,7 +462,7 @@ describe('processSyncBatch', () => {
       .mockResolvedValueOnce(mockSyncJob);
     (prisma.legislatureSession.upsert as Mock).mockResolvedValue(mockSession);
     (scanAvailableBills as Mock).mockResolvedValue([1]);
-    (fetchBillXml as Mock).mockResolvedValue('<billhistory bill="89(R) HB 1"><caption>Test</caption><authors>Test</authors></billhistory>');
+    (fetchBillXml as Mock).mockResolvedValue({ xml: '<billhistory bill="89(R) HB 1"><caption>Test</caption><authors>Test</authors></billhistory>', notFound: false, error: false });
     (parseBillXml as Mock).mockReturnValue({
       billId: 'HB 1',
       billType: 'HB',
@@ -502,7 +503,7 @@ describe('processSyncBatch', () => {
       .mockResolvedValueOnce({ ...mockSyncJob, status: 'PAUSED' }); // For update check
     (prisma.legislatureSession.upsert as Mock).mockResolvedValue(mockSession);
     (scanAvailableBills as Mock).mockResolvedValue([1, 2, 3, 4, 5]);
-    (fetchBillXml as Mock).mockResolvedValue('<billhistory bill="89(R) HB 1"><caption>Test</caption><authors>Test</authors></billhistory>');
+    (fetchBillXml as Mock).mockResolvedValue({ xml: '<billhistory bill="89(R) HB 1"><caption>Test</caption><authors>Test</authors></billhistory>', notFound: false, error: false });
     (parseBillXml as Mock).mockReturnValue({
       billId: 'HB 1',
       billType: 'HB',

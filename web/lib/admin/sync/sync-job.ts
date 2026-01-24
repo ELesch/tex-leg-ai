@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import { BillType, SyncJobStatus } from '@prisma/client';
 import { getSettingTyped, getSetting } from '@/lib/admin/settings';
-import { fetchBillXml, fetchBillTextFromUrl, scanAvailableBills } from './ftp-client';
+import { fetchBillXml, fetchBillTextFromUrl, scanAvailableBills, closeSharedClient } from './ftp-client';
 import { parseBillXml, ParsedBill } from './xml-parser';
 import { logger } from '@/lib/logger';
 
@@ -271,6 +271,12 @@ async function convertParsedBillToBillData(
   };
 }
 
+interface FetchBillFromFtpResult {
+  data: BillData | null;
+  notFound: boolean;  // true if bill doesn't exist (not an error)
+  error: boolean;     // true if there was an actual error
+}
+
 /**
  * Fetch bill data from FTP server (XML-based)
  */
@@ -278,30 +284,36 @@ async function fetchBillFromFtp(
   sessionCode: string,
   billType: BillType,
   billNumber: number
-): Promise<BillData | null> {
+): Promise<FetchBillFromFtpResult> {
   try {
     // Fetch XML from FTP
-    const xml = await fetchBillXml(sessionCode, billType, billNumber);
-    if (!xml) {
-      return null; // Bill doesn't exist
+    const result = await fetchBillXml(sessionCode, billType, billNumber);
+
+    if (result.notFound) {
+      return { data: null, notFound: true, error: false };
+    }
+
+    if (result.error || !result.xml) {
+      return { data: null, notFound: false, error: true };
     }
 
     // Parse XML
-    const parsed = parseBillXml(xml);
+    const parsed = parseBillXml(result.xml);
     if (!parsed) {
       logger.error('Failed to parse XML', { billType, billNumber });
-      return null;
+      return { data: null, notFound: false, error: true };
     }
 
     // Convert to BillData format and fetch bill text
-    return await convertParsedBillToBillData(parsed);
+    const data = await convertParsedBillToBillData(parsed);
+    return { data, notFound: false, error: false };
   } catch (error) {
     logger.error('Error fetching bill from FTP', {
       billType,
       billNumber,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
-    return null;
+    return { data: null, notFound: false, error: true };
   }
 }
 
@@ -516,17 +528,24 @@ export async function processSyncBatch(jobId: string): Promise<BatchResult> {
       break;
     }
 
-    const billData = await fetchBillFromFtp(job.sessionCode, currentBillType as BillType, billNumber);
+    const fetchResult = await fetchBillFromFtp(job.sessionCode, currentBillType as BillType, billNumber);
 
-    if (billData) {
+    if (fetchResult.notFound) {
+      // Bill doesn't exist - skip silently, not an error
+      billsProcessed.push({ billId: `${currentBillType} ${billNumber}`, status: 'skipped' });
+    } else if (fetchResult.error || !fetchResult.data) {
+      // Actual error
+      errors++;
+      billsProcessed.push({ billId: `${currentBillType} ${billNumber}`, status: 'error' });
+    } else {
+      // Success - save to database
+      const billData = fetchResult.data;
       const saveResult = await saveBill(billData, session.id);
       billsProcessed.push({ billId: billData.billId, status: saveResult });
 
       if (saveResult === 'created') created++;
       else if (saveResult === 'updated') updated++;
       else errors++;
-    } else {
-      errors++;
     }
 
     processed++;

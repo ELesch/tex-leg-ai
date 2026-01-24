@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import { BillType } from '@prisma/client';
 import { getSettingTyped, getSetting } from '@/lib/admin/settings';
-import { fetchBillXml, fetchBillTextFromUrl, scanAvailableBills } from './ftp-client';
+import { fetchBillXml, fetchBillTextFromUrl, scanAvailableBills, closeSharedClient, FetchBillResult } from './ftp-client';
 import { parseBillXml, ParsedBill } from './xml-parser';
 import { logger } from '@/lib/logger';
 
@@ -40,6 +40,7 @@ export interface SyncCompleteEvent {
     fetched: number;
     created: number;
     updated: number;
+    skipped: number;
     errors: number;
   };
 }
@@ -136,6 +137,12 @@ async function convertParsedBillToBillData(
   };
 }
 
+export interface FetchBillFromFtpResult {
+  data: BillData | null;
+  notFound: boolean;  // true if bill doesn't exist (not an error)
+  error: boolean;     // true if there was an actual error
+}
+
 /**
  * Fetch bill data from FTP server (XML-based)
  */
@@ -143,30 +150,36 @@ async function fetchBillFromFtp(
   sessionCode: string,
   billType: BillType,
   billNumber: number
-): Promise<BillData | null> {
+): Promise<FetchBillFromFtpResult> {
   try {
     // Fetch XML from FTP
-    const xml = await fetchBillXml(sessionCode, billType, billNumber);
-    if (!xml) {
-      return null; // Bill doesn't exist
+    const result = await fetchBillXml(sessionCode, billType, billNumber);
+
+    if (result.notFound) {
+      return { data: null, notFound: true, error: false };
+    }
+
+    if (result.error || !result.xml) {
+      return { data: null, notFound: false, error: true };
     }
 
     // Parse XML
-    const parsed = parseBillXml(xml);
+    const parsed = parseBillXml(result.xml);
     if (!parsed) {
       logger.error('Failed to parse XML', { billType, billNumber });
-      return null;
+      return { data: null, notFound: false, error: true };
     }
 
     // Convert to BillData format and fetch bill text
-    return await convertParsedBillToBillData(parsed);
+    const data = await convertParsedBillToBillData(parsed);
+    return { data, notFound: false, error: false };
   } catch (error) {
     logger.error('Error fetching bill from FTP', {
       billType,
       billNumber,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
-    return null;
+    return { data: null, notFound: false, error: true };
   }
 }
 
@@ -271,11 +284,12 @@ async function fetchAndProcessBills(
   onEvent: EventCallback,
   syncUntilComplete: boolean = false,
   abortSignal?: { aborted: boolean }
-): Promise<{ fetched: number; created: number; updated: number; errors: number }> {
+): Promise<{ fetched: number; created: number; updated: number; skipped: number; errors: number }> {
   let totalProcessed = 0;
   let totalFetched = 0;
   let created = 0;
   let updated = 0;
+  let skipped = 0;
   let errors = 0;
 
   onEvent('log', {
@@ -400,10 +414,30 @@ async function fetchAndProcessBills(
       } as SyncProgressEvent);
 
       // Fetch bill data from FTP
-      const billData = await fetchBillFromFtp(sessionCode, billType, billNumber);
+      const fetchResult = await fetchBillFromFtp(sessionCode, billType, billNumber);
 
-      if (billData) {
+      if (fetchResult.notFound) {
+        // Bill doesn't exist yet - this is expected, not an error
+        // Skip silently (the scan should have only returned existing bills,
+        // but race conditions can happen)
+        skipped++;
+        onEvent('bill', {
+          billId: `${billType} ${billNumber}`,
+          status: 'skipped',
+          message: 'Bill not found on FTP',
+        } as SyncBillEvent);
+      } else if (fetchResult.error || !fetchResult.data) {
+        // Actual error - count it
+        errors++;
+        onEvent('bill', {
+          billId: `${billType} ${billNumber}`,
+          status: 'error',
+          message: 'Failed to fetch from FTP',
+        } as SyncBillEvent);
+      } else {
+        // Success - save to database
         totalFetched++;
+        const billData = fetchResult.data;
 
         // Immediately save to database
         const saveResult = await saveBillToDatabase(billData, session.id);
@@ -435,18 +469,11 @@ async function fetchAndProcessBills(
             level: 'info',
           } as SyncLogEvent);
         }
-      } else {
-        errors++;
-        onEvent('bill', {
-          billId: `${billType} ${billNumber}`,
-          status: 'error',
-          message: 'Failed to fetch from FTP',
-        } as SyncBillEvent);
       }
 
-      // Rate limiting - delay every 5 requests
-      if (totalProcessed % 5 === 0) {
-        await new Promise((resolve) => setTimeout(resolve, batchDelay));
+      // Rate limiting - small delay every 10 requests (connection reuse makes this less critical)
+      if (totalProcessed % 10 === 0) {
+        await new Promise((resolve) => setTimeout(resolve, Math.min(batchDelay, 100)));
       }
     }
 
@@ -456,7 +483,7 @@ async function fetchAndProcessBills(
     } as SyncLogEvent);
   }
 
-  return { fetched: totalFetched, created, updated, errors };
+  return { fetched: totalFetched, created, updated, skipped, errors };
 }
 
 /**
@@ -537,6 +564,7 @@ export async function syncBillsWithProgress(
         fetched: result.fetched,
         created: result.created,
         updated: result.updated,
+        skipped: result.skipped,
         errors: result.errors,
       },
     } as SyncCompleteEvent);
@@ -554,5 +582,8 @@ export async function syncBillsWithProgress(
       message: error instanceof Error ? error.message : 'Unknown error',
       details: error instanceof Error ? error.stack : undefined,
     } as SyncErrorEvent);
+  } finally {
+    // Always close the FTP connection when done
+    closeSharedClient();
   }
 }
