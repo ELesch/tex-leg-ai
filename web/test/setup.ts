@@ -65,6 +65,7 @@ vi.mock('@/lib/db/prisma', () => ({
     bill: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
     },
@@ -121,6 +122,22 @@ vi.mock('@/lib/db/prisma', () => ({
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+    },
+    // Sync-related models
+    syncJob: {
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+    },
+    legislatureSession: {
+      upsert: vi.fn(),
+      findUnique: vi.fn(),
+    },
+    adminSetting: {
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
+      findMany: vi.fn(),
     },
   },
 }));
