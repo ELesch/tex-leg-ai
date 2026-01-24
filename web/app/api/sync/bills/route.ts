@@ -37,7 +37,7 @@ async function fetchBillsFromLegislature(
 
       const response = await fetch(listUrl, {
         headers: {
-          'User-Agent': 'TxLegAI Bill Sync Bot (educational/research)',
+          'User-Agent': 'TexLegAI Bill Sync Bot (educational/research)',
         },
       });
 
@@ -100,7 +100,7 @@ async function fetchBillDetails(
 
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'TxLegAI Bill Sync Bot (educational/research)',
+        'User-Agent': 'TexLegAI Bill Sync Bot (educational/research)',
       },
     });
 

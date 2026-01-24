@@ -123,7 +123,7 @@ function readBillContent(filePath: string): string | null {
  */
 async function migrate() {
   console.log('='.repeat(60));
-  console.log('TxLegAI Data Migration');
+  console.log('TexLegAI Data Migration');
   console.log('='.repeat(60));
 
   // Step 1: Create or get legislature session
@@ -254,10 +254,10 @@ async function migrateChatHistory(sessionId: string) {
 
   // Create system user for migrated chats
   const systemUser = await prisma.user.upsert({
-    where: { email: 'system@txlegai.local' },
+    where: { email: 'system@texlegai.local' },
     update: {},
     create: {
-      email: 'system@txlegai.local',
+      email: 'system@texlegai.local',
       name: 'System (Migrated)',
       role: 'ADMIN',
     },

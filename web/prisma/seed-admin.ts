@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = 'admin@txlegai.com';
+  const email = 'admin@texlegai.com';
   const password = 'pcl-is-awesome!';
   const name = 'Admin';
 

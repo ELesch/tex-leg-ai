@@ -9,6 +9,6 @@ export async function GET() {
   return NextResponse.json({
     status: 'ok',
     buildTimestamp: BUILD_TIMESTAMP,
-    message: 'TxLegAI API is running',
+    message: 'TexLegAI API is running',
   });
 }

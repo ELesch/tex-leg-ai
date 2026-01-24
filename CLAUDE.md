@@ -1,4 +1,4 @@
-# TxLegAI - Texas Legislature Bill Analysis Platform
+# TexLegAI - Texas Legislature Bill Analysis Platform
 
 ## Repository
 - **GitHub**: https://github.com/ELesch/tex-leg-ai.git
@@ -7,7 +7,7 @@
 
 ## Project Structure
 ```
-TxLegAI/
+TexLegAI/
 ├── web/                    # Next.js application
 │   ├── app/               # App router pages and API routes
 │   ├── components/        # React components
@@ -208,3 +208,69 @@ npx prisma migrate reset
 **Connection strings:**
 - `DATABASE_URL` - Use pooled connection (port 6543) for app runtime
 - `DIRECT_URL` - Use direct connection (port 5432) for migrations
+
+## Bill Sync from FTP
+
+Bills are synced from the Texas Legislature FTP server (`ftp.legis.state.tx.us`).
+
+### Running the Full Sync
+
+```bash
+cd web
+npx tsx scripts/full-sync.ts
+```
+
+This script:
+- Connects to FTP with 4 parallel workers (auto-reconnects on errors)
+- Fetches XML metadata from `/bills/89R/billhistory/`
+- Fetches HTML bill text from `/bills/89R/billtext/html/`
+- Cleans special characters (HTML entities like `&#xA0;`, metadata noise)
+- Upserts all bills to the database
+
+**Key details:**
+- Session code: `89R` (89th Regular Session)
+- ~8,700 bills (HB + SB)
+- Rate: ~3 bills/second
+- Uses retry logic with auto-reconnect for FTP connection resets
+
+### FTP Directory Structure
+
+```
+/bills/89R/
+├── billhistory/
+│   ├── house_bills/
+│   │   ├── HB00001_HB00099/    # Bills 1-99
+│   │   │   ├── HB 1.xml
+│   │   │   └── HB 2.xml
+│   │   ├── HB00100_HB00199/    # Bills 100-199
+│   │   └── ...
+│   └── senate_bills/
+│       └── SB00001_SB00099/
+└── billtext/
+    └── html/
+        ├── house_bills/
+        │   └── HB00001_HB00099/
+        │       ├── HB00001I.htm  # I=Introduced
+        │       ├── HB00001E.htm  # E=Engrossed
+        │       └── HB00001F.htm  # F=Final
+        └── senate_bills/
+```
+
+### Text Extraction
+
+The sync script extracts clean text from HTML by:
+1. Removing `<script>` and `<style>` tags
+2. Converting block elements to newlines
+3. Decoding all HTML entities (`&#xA0;` → space, `&#x27;` → apostrophe, etc.)
+4. Removing Word document metadata noise
+5. Stripping leading junk before actual bill content
+6. Limiting to 50,000 characters
+
+### Verification
+
+After sync, verify with:
+```bash
+npx tsx scripts/verify-db.ts
+```
+
+This shows bill counts, content stats, and sample bills.

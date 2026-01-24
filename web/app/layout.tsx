@@ -11,8 +11,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: 'TxLegAI - Texas Legislature Bill Analyzer',
-    template: '%s | TxLegAI',
+    default: 'TexLegAI - Texas Legislature Bill Analyzer',
+    template: '%s | TexLegAI',
   },
   description:
     'AI-powered tool for browsing, searching, and analyzing Texas Legislature bills',

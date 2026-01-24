@@ -56,7 +56,7 @@ function getDisplayName(name: string): string | null {
  */
 async function seedAuthors() {
   console.log('='.repeat(60));
-  console.log('TxLegAI Author Seeding');
+  console.log('TexLegAI Author Seeding');
   console.log('='.repeat(60));
 
   // Step 1: Get all unique author names from bills

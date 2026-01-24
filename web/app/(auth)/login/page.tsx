@@ -68,7 +68,7 @@ function LoginForm() {
             <FileText className="h-6 w-6 text-primary" />
           </div>
           <CardTitle className="text-2xl">Welcome back</CardTitle>
-          <CardDescription>Sign in to your TxLegAI account</CardDescription>
+          <CardDescription>Sign in to your TexLegAI account</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {error && (

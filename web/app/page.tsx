@@ -10,7 +10,7 @@ export default function HomePage() {
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
             <FileText className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">TxLegAI</span>
+            <span className="text-xl font-bold">TexLegAI</span>
           </div>
           <nav className="flex items-center gap-4">
             <Link href="/bills">
@@ -122,7 +122,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t py-8">
         <div className="container text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} TxLegAI. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} TexLegAI. All rights reserved.</p>
           <p className="mt-2">
             Data sourced from the Texas Legislature public records.
           </p>

@@ -95,7 +95,7 @@ export default function RegisterPage() {
           </div>
           <CardTitle className="text-2xl">Create an account</CardTitle>
           <CardDescription>
-            Sign up for TxLegAI to save bills and chat with AI
+            Sign up for TexLegAI to save bills and chat with AI
           </CardDescription>
         </CardHeader>
         <CardContent>

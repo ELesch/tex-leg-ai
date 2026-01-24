@@ -76,10 +76,24 @@ export interface DirectoryRange {
 /**
  * Get the directory name for a given bill type and number
  * e.g., HB 1 -> "HB00001_HB00099", HB 150 -> "HB00100_HB00199"
+ *
+ * Directory structure on FTP:
+ * - First directory: 1-99 (99 bills)
+ * - Subsequent directories: 100-199, 200-299, etc. (100 bills each)
  */
 export function getDirectoryRange(billType: string, billNumber: number): DirectoryRange {
-  const rangeStart = Math.floor((billNumber - 1) / 99) * 99 + 1;
-  const rangeEnd = rangeStart + 98;
+  let rangeStart: number;
+  let rangeEnd: number;
+
+  if (billNumber <= 99) {
+    rangeStart = 1;
+    rangeEnd = 99;
+  } else {
+    // For 100+, directories are in 100-bill chunks: 100-199, 200-299, etc.
+    rangeStart = Math.floor((billNumber - 100) / 100) * 100 + 100;
+    rangeEnd = rangeStart + 99;
+  }
+
   const paddedStart = rangeStart.toString().padStart(5, '0');
   const paddedEnd = rangeEnd.toString().padStart(5, '0');
   return {
@@ -324,7 +338,7 @@ export async function fetchBillTextFromUrl(url: string): Promise<string | null> 
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'TxLegAI Bill Sync Bot (educational/research)',
+        'User-Agent': 'TexLegAI Bill Sync Bot (educational/research)',
       },
     });
 

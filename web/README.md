@@ -1,4 +1,4 @@
-# TxLegAI - Next.js Web Application
+# TexLegAI - Next.js Web Application
 
 AI-powered tool for browsing, searching, and analyzing Texas Legislature bills.
 
