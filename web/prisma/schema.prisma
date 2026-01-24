@@ -3,13 +3,14 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["fullTextSearch"]
+  previewFeatures = ["fullTextSearch", "multiSchema"]
 }
 
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+  schemas   = ["texlegai"]
 }
 
 // ============================================
@@ -34,11 +35,11 @@ model User {
   aiApiKey   String? @db.Text // User's API key (will be encrypted)
 
   // Relations
-  accounts      Account[]
-  sessions      Session[]
-  chatSessions  ChatSession[]
-  savedBills    SavedBill[]
-  adminSettings AdminSetting[]
+  accounts       Account[]
+  sessions       Session[]
+  chatSessions   ChatSession[]
+  followedBills  FollowedBill[]
+  adminSettings  AdminSetting[]
 
   // Team collaboration relations
   teamMemberships   TeamMembership[]
@@ -56,11 +57,14 @@ model User {
   contactNotes    ContactNote[]
 
   @@index([email])
+  @@schema("texlegai")
 }
 
 enum UserRole {
   USER
   ADMIN
+
+  @@schema("texlegai")
 }
 
 // NextAuth.js required models
@@ -81,6 +85,7 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@schema("texlegai")
 }
 
 model Session {
@@ -89,6 +94,8 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@schema("texlegai")
 }
 
 model VerificationToken {
@@ -97,6 +104,7 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+  @@schema("texlegai")
 }
 
 // ============================================
@@ -118,6 +126,7 @@ model LegislatureSession {
 
   @@index([code])
   @@map("legislature_session")
+  @@schema("texlegai")
 }
 
 // ============================================
@@ -167,7 +176,7 @@ model Bill {
 
   // Relations
   chatSessions   ChatSession[]
-  savedBy        SavedBill[]
+  followedBy     FollowedBill[]
   teamWorkspaces TeamWorkspace[]
 
   // Personal annotations and notes
@@ -187,6 +196,7 @@ model Bill {
   @@index([complexity])
   @@index([billPattern])
   @@index([isPdfOnly])
+  @@schema("texlegai")
 }
 
 enum BillType {
@@ -196,6 +206,8 @@ enum BillType {
   SJR // Senate Joint Resolution
   HCR // House Concurrent Resolution
   SCR // Senate Concurrent Resolution
+
+  @@schema("texlegai")
 }
 
 enum BillComplexity {
@@ -203,12 +215,16 @@ enum BillComplexity {
   MODERATE // Multiple sections, single code
   COMPLEX // Multiple codes, significant changes
   OMNIBUS // Multiple articles, extensive changes across codes
+
+  @@schema("texlegai")
 }
 
 enum BillPattern {
   TERMINOLOGY_REPLACEMENT // Bill primarily replaces terms throughout code
   OMNIBUS // Bill contains multiple articles covering different topics
   SINGLE_CODE // Bill modifies a single Texas Code
+
+  @@schema("texlegai")
 }
 
 // ============================================
@@ -230,6 +246,7 @@ model BillArticle {
   @@index([billId])
   @@index([articleNumber])
   @@map("bill_article")
+  @@schema("texlegai")
 }
 
 // Represents a reference to a specific code section being modified
@@ -253,12 +270,15 @@ model BillCodeReference {
   @@index([action])
   @@index([billId, code])
   @@map("bill_code_reference")
+  @@schema("texlegai")
 }
 
 enum CodeReferenceAction {
   ADD // Adding new section
   AMEND // Modifying existing section
   REPEAL // Removing section
+
+  @@schema("texlegai")
 }
 
 // Tracks terminology replacement patterns in bills
@@ -276,6 +296,7 @@ model TerminologyReplacement {
   @@index([billId])
   @@index([fromTerm])
   @@map("terminology_replacement")
+  @@schema("texlegai")
 }
 
 // ============================================
@@ -300,6 +321,7 @@ model ChatSession {
   @@index([userId])
   @@index([billId])
   @@map("chat_session")
+  @@schema("texlegai")
 }
 
 model ChatMessage {
@@ -314,19 +336,22 @@ model ChatMessage {
 
   @@index([chatSessionId])
   @@map("chat_message")
+  @@schema("texlegai")
 }
 
 enum MessageRole {
   USER
   ASSISTANT
   SYSTEM
+
+  @@schema("texlegai")
 }
 
 // ============================================
-// Saved Bills Model
+// Followed Bills Model
 // ============================================
 
-model SavedBill {
+model FollowedBill {
   id     String @id @default(cuid())
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -340,7 +365,8 @@ model SavedBill {
 
   @@unique([userId, billId])
   @@index([userId])
-  @@map("saved_bill")
+  @@map("followed_bill")
+  @@schema("texlegai")
 }
 
 // ============================================
@@ -361,6 +387,7 @@ model AdminSetting {
 
   @@index([category])
   @@map("admin_setting")
+  @@schema("texlegai")
 }
 
 enum SettingType {
@@ -368,6 +395,8 @@ enum SettingType {
   NUMBER
   BOOLEAN
   JSON
+
+  @@schema("texlegai")
 }
 
 // ============================================
@@ -395,6 +424,7 @@ model Team {
 
   @@index([slug])
   @@map("team")
+  @@schema("texlegai")
 }
 
 enum TeamRole {
@@ -403,6 +433,8 @@ enum TeamRole {
   CONTRIBUTOR
   REVIEWER
   VIEWER
+
+  @@schema("texlegai")
 }
 
 model TeamMembership {
@@ -418,6 +450,7 @@ model TeamMembership {
   @@index([teamId])
   @@index([userId])
   @@map("team_membership")
+  @@schema("texlegai")
 }
 
 model TeamInvitation {
@@ -434,6 +467,7 @@ model TeamInvitation {
   @@index([teamId])
   @@index([token])
   @@map("team_invitation")
+  @@schema("texlegai")
 }
 
 model TeamWorkspace {
@@ -458,6 +492,7 @@ model TeamWorkspace {
   @@index([teamId])
   @@index([billId])
   @@map("team_workspace")
+  @@schema("texlegai")
 }
 
 enum WorkspaceStatus {
@@ -467,6 +502,8 @@ enum WorkspaceStatus {
   APPROVED
   REJECTED
   ON_HOLD
+
+  @@schema("texlegai")
 }
 
 enum WorkspacePriority {
@@ -474,6 +511,8 @@ enum WorkspacePriority {
   MEDIUM
   HIGH
   URGENT
+
+  @@schema("texlegai")
 }
 
 model BillAnnotation {
@@ -493,6 +532,7 @@ model BillAnnotation {
 
   @@index([workspaceId])
   @@map("bill_annotation")
+  @@schema("texlegai")
 }
 
 enum AnnotationType {
@@ -500,12 +540,16 @@ enum AnnotationType {
   QUESTION
   CONCERN
   HIGHLIGHT
+
+  @@schema("texlegai")
 }
 
 enum NoteSourceType {
   MANUAL
   CHAT
   TEAM_CHAT
+
+  @@schema("texlegai")
 }
 
 model WorkspaceComment {
@@ -523,6 +567,7 @@ model WorkspaceComment {
 
   @@index([workspaceId])
   @@map("workspace_comment")
+  @@schema("texlegai")
 }
 
 model TeamChatSession {
@@ -534,6 +579,7 @@ model TeamChatSession {
   messages    TeamChatMessage[]
 
   @@map("team_chat_session")
+  @@schema("texlegai")
 }
 
 model TeamChatMessage {
@@ -548,6 +594,7 @@ model TeamChatMessage {
 
   @@index([chatSessionId])
   @@map("team_chat_message")
+  @@schema("texlegai")
 }
 
 model TeamActivity {
@@ -564,6 +611,7 @@ model TeamActivity {
   @@index([teamId])
   @@index([createdAt])
   @@map("team_activity")
+  @@schema("texlegai")
 }
 
 enum ActivityType {
@@ -574,6 +622,8 @@ enum ActivityType {
   CHAT_MESSAGE
   MEMBER_JOINED
   MEMBER_LEFT
+
+  @@schema("texlegai")
 }
 
 // ============================================
@@ -596,6 +646,7 @@ model PersonalAnnotation {
 
   @@index([userId, billId])
   @@map("personal_annotation")
+  @@schema("texlegai")
 }
 
 model PersonalNote {
@@ -612,6 +663,7 @@ model PersonalNote {
 
   @@index([userId, billId])
   @@map("personal_note")
+  @@schema("texlegai")
 }
 
 // ============================================
@@ -643,11 +695,14 @@ model Author {
 
   @@index([name])
   @@map("author")
+  @@schema("texlegai")
 }
 
 enum Chamber {
   HOUSE
   SENATE
+
+  @@schema("texlegai")
 }
 
 // User's personal contact
@@ -677,6 +732,7 @@ model Contact {
   @@index([userId])
   @@index([lastName, firstName])
   @@map("contact")
+  @@schema("texlegai")
 }
 
 // Links a contact to an author with a staff position
@@ -701,6 +757,7 @@ model StaffPosition {
   @@index([authorId])
   @@index([contactId])
   @@map("staff_position")
+  @@schema("texlegai")
 }
 
 enum StaffRole {
@@ -715,6 +772,8 @@ enum StaffRole {
   ADMINISTRATIVE_ASSISTANT
   INTERN
   OTHER
+
+  @@schema("texlegai")
 }
 
 // User's personal link to an author (for notes and personal contact info)
@@ -739,6 +798,7 @@ model UserContact {
   @@index([userId])
   @@index([authorId])
   @@map("user_contact")
+  @@schema("texlegai")
 }
 
 // Notes with @-mention support
@@ -763,6 +823,7 @@ model ContactNote {
   @@index([contactId])
   @@index([userContactId])
   @@map("contact_note")
+  @@schema("texlegai")
 }
 
 // Sharing contacts with teams
@@ -778,6 +839,7 @@ model SharedContact {
   @@unique([contactId, teamId])
   @@index([teamId])
   @@map("shared_contact")
+  @@schema("texlegai")
 }
 
 // ============================================
@@ -821,6 +883,7 @@ model SyncJob {
 
   @@index([status])
   @@map("sync_job")
+  @@schema("texlegai")
 }
 
 enum SyncJobStatus {
@@ -830,4 +893,6 @@ enum SyncJobStatus {
   COMPLETED   // All bill types exhausted
   STOPPED     // User stopped manually
   ERROR       // Failed with error
+
+  @@schema("texlegai")
 }

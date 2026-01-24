@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import {
   ChevronLeft,
-  Bookmark,
+  Bell,
   Share2,
   FileText,
   ChevronDown,
@@ -51,21 +51,21 @@ export function BillDetailWorkspace({ bill }: BillDetailWorkspaceProps) {
   const { toast } = useToast();
   const [showFullContent, setShowFullContent] = useState(false);
   const [showBillInfo, setShowBillInfo] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
 
-  const handleSave = async () => {
+  const handleFollow = async () => {
     if (!session) {
       toast({
         title: 'Sign in required',
-        description: 'Please sign in to save bills',
+        description: 'Please sign in to follow bills',
         variant: 'destructive',
       });
       return;
     }
 
-    setIsSaving(true);
+    setIsFollowing(true);
     try {
-      const response = await fetch('/api/saved', {
+      const response = await fetch('/api/followed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ billId: bill.billId }),
@@ -73,20 +73,20 @@ export function BillDetailWorkspace({ bill }: BillDetailWorkspaceProps) {
 
       if (response.ok) {
         toast({
-          title: 'Bill saved',
-          description: `${bill.billId} has been added to your saved bills`,
+          title: 'Bill followed',
+          description: `${bill.billId} has been added to your followed bills`,
         });
       } else {
-        throw new Error('Failed to save');
+        throw new Error('Failed to follow');
       }
     } catch {
       toast({
         title: 'Error',
-        description: 'Failed to save bill. Please try again.',
+        description: 'Failed to follow bill. Please try again.',
         variant: 'destructive',
       });
     } finally {
-      setIsSaving(false);
+      setIsFollowing(false);
     }
   };
 
@@ -137,9 +137,9 @@ export function BillDetailWorkspace({ bill }: BillDetailWorkspaceProps) {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={handleSave} disabled={isSaving}>
-            <Bookmark className="mr-2 h-4 w-4" />
-            {isSaving ? 'Saving...' : 'Save'}
+          <Button variant="outline" size="sm" onClick={handleFollow} disabled={isFollowing}>
+            <Bell className="mr-2 h-4 w-4" />
+            {isFollowing ? 'Following...' : 'Follow'}
           </Button>
           {session && (
             <AddToTeamDialog

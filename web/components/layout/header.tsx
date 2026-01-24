@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { FileText, Menu, LogOut, Settings, Bookmark } from 'lucide-react';
+import { FileText, Menu, LogOut, Settings, Bell } from 'lucide-react';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { SyncStatusIndicator } from '@/components/admin/sync-status-indicator';
 import { useState } from 'react';
@@ -46,10 +46,10 @@ export function Header() {
           </Link>
           {session && (
             <Link
-              href="/saved"
+              href="/followed"
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
-              Saved Bills
+              Followed Bills
             </Link>
           )}
         </nav>
@@ -88,9 +88,9 @@ export function Header() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/saved" className="cursor-pointer">
-                    <Bookmark className="mr-2 h-4 w-4" />
-                    Saved Bills
+                  <Link href="/followed" className="cursor-pointer">
+                    <Bell className="mr-2 h-4 w-4" />
+                    Followed Bills
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
@@ -158,11 +158,11 @@ export function Header() {
           </Link>
           {session && (
             <Link
-              href="/saved"
+              href="/followed"
               className="rounded-md px-3 py-2 text-sm font-medium hover:bg-muted"
               onClick={() => setMobileMenuOpen(false)}
             >
-              Saved Bills
+              Followed Bills
             </Link>
           )}
         </nav>

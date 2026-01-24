@@ -12,15 +12,15 @@ function createMockRequest(body?: object, method: string = 'POST'): Request {
   if (body) {
     init.body = JSON.stringify(body);
   }
-  return new Request('http://localhost:3000/api/saved', init);
+  return new Request('http://localhost:3000/api/followed', init);
 }
 
-describe('/api/saved', () => {
+describe('/api/followed', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('GET /api/saved', () => {
+  describe('GET /api/followed', () => {
     it('returns 401 if user is not authenticated', async () => {
       vi.mocked(auth).mockResolvedValueOnce(null);
 
@@ -31,15 +31,15 @@ describe('/api/saved', () => {
       expect(data.error).toBe('Unauthorized');
     });
 
-    it('returns saved bills for authenticated user', async () => {
+    it('returns followed bills for authenticated user', async () => {
       vi.mocked(auth).mockResolvedValueOnce({
         user: { id: 'user-123', email: 'test@example.com' },
         expires: new Date().toISOString(),
       });
 
-      const mockSavedBills = [
+      const mockFollowedBills = [
         {
-          id: 'saved-1',
+          id: 'followed-1',
           userId: 'user-123',
           billId: 'bill-1',
           notes: 'Important bill',
@@ -59,33 +59,33 @@ describe('/api/saved', () => {
         },
       ];
 
-      vi.mocked(prisma.savedBill.findMany).mockResolvedValueOnce(mockSavedBills);
+      vi.mocked(prisma.followedBill.findMany).mockResolvedValueOnce(mockFollowedBills);
 
       const response = await GET();
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.savedBills).toHaveLength(1);
-      expect(data.savedBills[0].bill.billId).toBe('HB 123');
+      expect(data.followedBills).toHaveLength(1);
+      expect(data.followedBills[0].bill.billId).toBe('HB 123');
     });
 
-    it('returns empty array when no saved bills', async () => {
+    it('returns empty array when no followed bills', async () => {
       vi.mocked(auth).mockResolvedValueOnce({
         user: { id: 'user-123', email: 'test@example.com' },
         expires: new Date().toISOString(),
       });
 
-      vi.mocked(prisma.savedBill.findMany).mockResolvedValueOnce([]);
+      vi.mocked(prisma.followedBill.findMany).mockResolvedValueOnce([]);
 
       const response = await GET();
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.savedBills).toEqual([]);
+      expect(data.followedBills).toEqual([]);
     });
   });
 
-  describe('POST /api/saved', () => {
+  describe('POST /api/followed', () => {
     it('returns 401 if user is not authenticated', async () => {
       vi.mocked(auth).mockResolvedValueOnce(null);
 
@@ -127,7 +127,7 @@ describe('/api/saved', () => {
       expect(data.error).toBe('Bill not found');
     });
 
-    it('returns 409 if bill already saved', async () => {
+    it('returns 409 if bill already followed', async () => {
       vi.mocked(auth).mockResolvedValueOnce({
         user: { id: 'user-123', email: 'test@example.com' },
         expires: new Date().toISOString(),
@@ -152,8 +152,8 @@ describe('/api/saved', () => {
         updatedAt: new Date(),
       });
 
-      vi.mocked(prisma.savedBill.findUnique).mockResolvedValueOnce({
-        id: 'saved-1',
+      vi.mocked(prisma.followedBill.findUnique).mockResolvedValueOnce({
+        id: 'followed-1',
         userId: 'user-123',
         billId: 'bill-1',
         notes: null,
@@ -167,10 +167,10 @@ describe('/api/saved', () => {
       const data = await response.json();
 
       expect(response.status).toBe(409);
-      expect(data.error).toBe('Bill already saved');
+      expect(data.error).toBe('Bill already followed');
     });
 
-    it('saves bill successfully', async () => {
+    it('follows bill successfully', async () => {
       vi.mocked(auth).mockResolvedValueOnce({
         user: { id: 'user-123', email: 'test@example.com' },
         expires: new Date().toISOString(),
@@ -195,10 +195,10 @@ describe('/api/saved', () => {
         updatedAt: new Date(),
       });
 
-      vi.mocked(prisma.savedBill.findUnique).mockResolvedValueOnce(null);
+      vi.mocked(prisma.followedBill.findUnique).mockResolvedValueOnce(null);
 
-      vi.mocked(prisma.savedBill.create).mockResolvedValueOnce({
-        id: 'saved-1',
+      vi.mocked(prisma.followedBill.create).mockResolvedValueOnce({
+        id: 'followed-1',
         userId: 'user-123',
         billId: 'bill-1',
         notes: 'My notes',
@@ -216,11 +216,11 @@ describe('/api/saved', () => {
       const data = await response.json();
 
       expect(response.status).toBe(201);
-      expect(data.savedBill).toBeDefined();
+      expect(data.followedBill).toBeDefined();
     });
   });
 
-  describe('DELETE /api/saved', () => {
+  describe('DELETE /api/followed', () => {
     it('returns 401 if user is not authenticated', async () => {
       vi.mocked(auth).mockResolvedValueOnce(null);
 
@@ -262,7 +262,7 @@ describe('/api/saved', () => {
       expect(data.error).toBe('Bill not found');
     });
 
-    it('deletes saved bill successfully', async () => {
+    it('unfollows bill successfully', async () => {
       vi.mocked(auth).mockResolvedValueOnce({
         user: { id: 'user-123', email: 'test@example.com' },
         expires: new Date().toISOString(),
@@ -287,8 +287,8 @@ describe('/api/saved', () => {
         updatedAt: new Date(),
       });
 
-      vi.mocked(prisma.savedBill.delete).mockResolvedValueOnce({
-        id: 'saved-1',
+      vi.mocked(prisma.followedBill.delete).mockResolvedValueOnce({
+        id: 'followed-1',
         userId: 'user-123',
         billId: 'bill-1',
         notes: null,

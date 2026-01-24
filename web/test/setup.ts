@@ -69,7 +69,7 @@ vi.mock('@/lib/db/prisma', () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
-    savedBill: {
+    followedBill: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
