@@ -257,29 +257,26 @@ export function BillDetail({ bill }: BillDetailProps) {
                 )}
               </div>
             </div>
+
+            {/* Subjects */}
+            {bill.subjects.length > 0 && (
+              <>
+                <Separator />
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Subjects</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {bill.subjects.map((subject, i) => (
+                      <Badge key={i} variant="secondary">
+                        {subject}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </CardContent>
         )}
       </Card>
-
-      {/* Subjects */}
-      {bill.subjects.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Subjects
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {bill.subjects.map((subject, i) => (
-                <Badge key={i} variant="secondary">
-                  {subject}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Full content */}
       {bill.content && (
