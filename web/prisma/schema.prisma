@@ -56,6 +56,11 @@ model User {
   userContacts    UserContact[]
   contactNotes    ContactNote[]
 
+  // Push notification relations
+  pushSubscriptions      PushSubscription[]
+  notificationPreference NotificationPreference?
+  billNotifications      BillNotification[]
+
   @@index([email])
   @@schema("texlegai")
 }
@@ -362,6 +367,9 @@ model FollowedBill {
   tags      String[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Push notification relation
+  notification BillNotification?
 
   @@unique([userId, billId])
   @@index([userId])
@@ -894,5 +902,62 @@ enum SyncJobStatus {
   STOPPED     // User stopped manually
   ERROR       // Failed with error
 
+  @@schema("texlegai")
+}
+
+// ============================================
+// Push Notification Models
+// ============================================
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @db.Text
+  p256dh    String
+  auth      String
+  userAgent String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@unique([userId, endpoint])
+  @@index([userId])
+  @@map("push_subscription")
+  @@schema("texlegai")
+}
+
+model NotificationPreference {
+  id       String  @id @default(cuid())
+  userId   String  @unique
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled  Boolean @default(false)
+
+  // Defaults for new bill notifications
+  defaultStatusChange     Boolean @default(true)
+  defaultNewAction        Boolean @default(true)
+  defaultNewVersion       Boolean @default(true)
+  defaultHearingScheduled Boolean @default(true)
+  defaultVoteRecorded     Boolean @default(true)
+
+  @@map("notification_preference")
+  @@schema("texlegai")
+}
+
+model BillNotification {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  followedBillId String       @unique
+  followedBill   FollowedBill @relation(fields: [followedBillId], references: [id], onDelete: Cascade)
+
+  enabled           Boolean @default(true)
+  statusChange      Boolean @default(true)
+  newAction         Boolean @default(true)
+  newVersion        Boolean @default(true)
+  hearingScheduled  Boolean @default(true)
+  voteRecorded      Boolean @default(true)
+
+  @@index([userId])
+  @@index([followedBillId])
+  @@map("bill_notification")
   @@schema("texlegai")
 }
