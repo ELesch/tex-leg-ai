@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
@@ -60,7 +60,7 @@ function getActionVariant(action: string): 'add' | 'amend' | 'repeal' {
   }
 }
 
-export default function StatutesPage() {
+function StatutesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedCode = searchParams.get('code');
@@ -345,5 +345,59 @@ export default function StatutesPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+function StatutesPageFallback() {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex-shrink-0 p-6 pb-4">
+        <h1 className="flex items-center gap-2 text-3xl font-bold">
+          <Scale className="h-8 w-8" />
+          Texas Statutes
+        </h1>
+        <p className="mt-1 text-muted-foreground">
+          Browse Texas codes and see which bills affect each section
+        </p>
+      </div>
+      <div className="flex min-h-0 flex-1 gap-4 px-6 pb-6">
+        <Card className="flex w-72 flex-col">
+          <CardHeader className="flex-shrink-0 pb-2">
+            <CardTitle className="text-sm font-medium">Texas Codes</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 p-4">
+            <div className="space-y-2">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="flex w-80 flex-col">
+          <CardHeader className="flex-shrink-0 pb-2">
+            <CardTitle className="text-sm font-medium">Select a Code</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 p-4">
+            <Skeleton className="h-32 w-full" />
+          </CardContent>
+        </Card>
+        <Card className="flex flex-1 flex-col">
+          <CardHeader className="flex-shrink-0 pb-2">
+            <CardTitle className="text-sm font-medium">Select a Section</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 p-4">
+            <Skeleton className="h-32 w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+export default function StatutesPage() {
+  return (
+    <Suspense fallback={<StatutesPageFallback />}>
+      <StatutesPageContent />
+    </Suspense>
   );
 }
