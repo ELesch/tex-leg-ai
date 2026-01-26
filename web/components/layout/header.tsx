@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -11,48 +12,70 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { FileText, Menu, LogOut, Settings, Bell } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  FileText,
+  LogOut,
+  Settings,
+  Menu,
+  X,
+  Search,
+  Bell,
+  BarChart3,
+  HelpCircle,
+  Lock,
+} from 'lucide-react';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { SyncStatusIndicator } from '@/components/admin/sync-status-indicator';
-import { useState } from 'react';
 import { cn } from '@/lib/utils';
+
+interface MobileNavItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  requiresAuth?: boolean;
+}
+
+const mobileNavItems: MobileNavItem[] = [
+  { name: 'Browse Bills', href: '/bills', icon: FileText },
+  { name: 'Advanced Search', href: '/search', icon: Search },
+  { name: 'Followed Bills', href: '/followed', icon: Bell, requiresAuth: true },
+  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { name: 'Settings', href: '/settings', icon: Settings, requiresAuth: true },
+  { name: 'Help', href: '/help', icon: HelpCircle },
+];
 
 export function Header() {
   const { data: session, status } = useSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isAuthenticated = !!session?.user;
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
+        {/* Mobile menu button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        >
+          {mobileMenuOpen ? (
+            <X className="h-5 w-5" />
+          ) : (
+            <Menu className="h-5 w-5" />
+          )}
+        </Button>
+
         {/* Logo */}
         <Link href="/bills" className="flex items-center gap-2">
           <FileText className="h-6 w-6 text-primary" />
           <span className="text-xl font-bold">TexLegAI</span>
         </Link>
-
-        {/* Desktop Navigation */}
-        <nav className="hidden items-center gap-6 md:flex">
-          <Link
-            href="/bills"
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Bills
-          </Link>
-          <Link
-            href="/search"
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Advanced Search
-          </Link>
-          {session && (
-            <Link
-              href="/followed"
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Followed Bills
-            </Link>
-          )}
-        </nav>
 
         {/* User Menu */}
         <div className="flex items-center gap-4">
@@ -88,12 +111,6 @@ export function Header() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/followed" className="cursor-pointer">
-                    <Bell className="mr-2 h-4 w-4" />
-                    Followed Bills
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
                   <Link href="/settings" className="cursor-pointer">
                     <Settings className="mr-2 h-4 w-4" />
                     Settings
@@ -121,16 +138,6 @@ export function Header() {
               </Link>
             </div>
           )}
-
-          {/* Mobile menu button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
         </div>
       </div>
 
@@ -141,30 +148,44 @@ export function Header() {
           mobileMenuOpen ? 'block' : 'hidden'
         )}
       >
-        <nav className="container flex flex-col gap-2 py-4">
-          <Link
-            href="/bills"
-            className="rounded-md px-3 py-2 text-sm font-medium hover:bg-muted"
-            onClick={() => setMobileMenuOpen(false)}
-          >
-            Bills
-          </Link>
-          <Link
-            href="/search"
-            className="rounded-md px-3 py-2 text-sm font-medium hover:bg-muted"
-            onClick={() => setMobileMenuOpen(false)}
-          >
-            Advanced Search
-          </Link>
-          {session && (
-            <Link
-              href="/followed"
-              className="rounded-md px-3 py-2 text-sm font-medium hover:bg-muted"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Followed Bills
-            </Link>
-          )}
+        <nav className="container flex flex-col gap-1 py-4">
+          {mobileNavItems.map((item) => {
+            const isDisabled = item.requiresAuth && !isAuthenticated;
+
+            if (isDisabled) {
+              return (
+                <Tooltip key={item.name}>
+                  <TooltipTrigger asChild>
+                    <div
+                      className={cn(
+                        'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium',
+                        'text-muted-foreground/50 cursor-not-allowed'
+                      )}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {item.name}
+                      <Lock className="ml-auto h-3 w-3" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Account required</p>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            }
+
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-muted"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <item.icon className="h-4 w-4" />
+                {item.name}
+              </Link>
+            );
+          })}
         </nav>
       </div>
     </header>

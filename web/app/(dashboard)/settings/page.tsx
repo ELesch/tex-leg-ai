@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, User, Lock, Bell, Trash2, Bot, CheckCircle2 } from 'lucide-react';
+import { Loader2, User, Lock, Bot, CheckCircle2 } from 'lucide-react';
 
 type AIProvider = 'openai' | 'anthropic' | 'google';
 
@@ -58,9 +58,6 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
-  const [followedBills, setFollowedBills] = useState<any[]>([]);
-  const [isLoadingFollowed, setIsLoadingFollowed] = useState(true);
-
   const [aiProvider, setAiProvider] = useState<AIProvider>('openai');
   const [aiModel, setAiModel] = useState('');
   const [aiApiKey, setAiApiKey] = useState('');
@@ -76,25 +73,6 @@ export default function SettingsPage() {
       setName(session.user.name);
     }
   }, [session, status, router]);
-
-  useEffect(() => {
-    async function fetchFollowedBills() {
-      try {
-        const res = await fetch('/api/followed');
-        if (res.ok) {
-          const data = await res.json();
-          setFollowedBills(data.followedBills || []);
-        }
-      } catch (error) {
-        console.error('Failed to fetch followed bills:', error);
-      } finally {
-        setIsLoadingFollowed(false);
-      }
-    }
-    if (status === 'authenticated') {
-      fetchFollowedBills();
-    }
-  }, [status]);
 
   useEffect(() => {
     async function fetchAiSettings() {
@@ -211,30 +189,6 @@ export default function SettingsPage() {
       });
     } finally {
       setIsUpdatingPassword(false);
-    }
-  };
-
-  const handleUnfollowBill = async (billId: string) => {
-    try {
-      const res = await fetch('/api/followed', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ billId }),
-      });
-
-      if (res.ok) {
-        setFollowedBills(followedBills.filter(fb => fb.bill.billId !== billId));
-        toast({
-          title: 'Bill unfollowed',
-          description: 'The bill has been removed from your followed list.',
-        });
-      }
-    } catch {
-      toast({
-        title: 'Error',
-        description: 'Failed to unfollow bill',
-        variant: 'destructive',
-      });
     }
   };
 
@@ -486,57 +440,6 @@ export default function SettingsPage() {
               Update Password
             </Button>
           </form>
-        </CardContent>
-      </Card>
-
-      {/* Followed Bills */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Bell className="h-5 w-5" />
-            <CardTitle>Followed Bills</CardTitle>
-          </div>
-          <CardDescription>Bills you&apos;re following for updates</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoadingFollowed ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : followedBills.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">
-              You haven&apos;t followed any bills yet. Browse bills and click the follow button to add them here.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {followedBills.map((followed) => (
-                <div
-                  key={followed.id}
-                  className="flex items-center justify-between rounded-lg border p-3"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium">{followed.bill.billId}</p>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {followed.bill.description}
-                    </p>
-                    {followed.notes && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Note: {followed.notes}
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleUnfollowBill(followed.bill.billId)}
-                    className="ml-2 text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
         </CardContent>
       </Card>
 

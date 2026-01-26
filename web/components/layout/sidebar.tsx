@@ -6,6 +6,11 @@ import { useSession } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import { useTeams } from '@/hooks/use-teams';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   FileText,
   Search,
   Bell,
@@ -15,13 +20,21 @@ import {
   Shield,
   Users,
   Plus,
+  Lock,
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
 }
 
-const navigation = [
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  requiresAuth?: boolean;
+}
+
+const navigation: NavItem[] = [
   {
     name: 'Browse Bills',
     href: '/bills',
@@ -45,7 +58,7 @@ const navigation = [
   },
 ];
 
-const secondaryNavigation = [
+const secondaryNavigation: NavItem[] = [
   {
     name: 'Settings',
     href: '/settings',
@@ -59,10 +72,60 @@ const secondaryNavigation = [
   },
 ];
 
+function NavItemComponent({
+  item,
+  isActive,
+  isAuthenticated
+}: {
+  item: NavItem;
+  isActive: boolean;
+  isAuthenticated: boolean;
+}) {
+  const isDisabled = item.requiresAuth && !isAuthenticated;
+
+  if (isDisabled) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            className={cn(
+              'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+              'text-muted-foreground/50 cursor-not-allowed'
+            )}
+          >
+            <item.icon className="h-4 w-4" />
+            {item.name}
+            <Lock className="ml-auto h-3 w-3" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="right">
+          <p>Account required</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+        isActive
+          ? 'bg-primary/10 text-primary'
+          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+      )}
+    >
+      <item.icon className="h-4 w-4" />
+      {item.name}
+    </Link>
+  );
+}
+
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === 'ADMIN';
+  const isAuthenticated = !!session?.user;
   const { teams, isLoading: teamsLoading } = useTeams();
 
   return (
@@ -79,19 +142,12 @@ export function Sidebar({ className }: SidebarProps) {
         {navigation.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
-            <Link
+            <NavItemComponent
               key={item.name}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )}
-            >
-              <item.icon className="h-4 w-4" />
-              {item.name}
-            </Link>
+              item={item}
+              isActive={isActive}
+              isAuthenticated={isAuthenticated}
+            />
           );
         })}
 
@@ -154,19 +210,12 @@ export function Sidebar({ className }: SidebarProps) {
         {secondaryNavigation.map((item) => {
           const isActive = pathname === item.href;
           return (
-            <Link
+            <NavItemComponent
               key={item.name}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )}
-            >
-              <item.icon className="h-4 w-4" />
-              {item.name}
-            </Link>
+              item={item}
+              isActive={isActive}
+              isAuthenticated={isAuthenticated}
+            />
           );
         })}
 
