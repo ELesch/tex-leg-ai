@@ -34,6 +34,7 @@ import {
   Moon,
   Monitor,
   LogOut,
+  Scale,
 } from 'lucide-react';
 import { SyncStatusIndicator } from '@/components/admin/sync-status-indicator';
 
@@ -70,6 +71,11 @@ const navigation: NavItem[] = [
     name: 'Analytics',
     href: '/analytics',
     icon: BarChart3,
+  },
+  {
+    name: 'Statutes',
+    href: '/statutes',
+    icon: Scale,
   },
 ];
 

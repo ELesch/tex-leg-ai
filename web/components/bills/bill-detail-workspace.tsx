@@ -25,6 +25,7 @@ import { BillWorkspaceLayout } from '@/components/bills/bill-workspace-layout';
 import { AuthorLinks } from '@/components/bills/author-link';
 import { ChatPanel } from '@/components/chat/chat-panel';
 import { PersonalNotesPanel } from '@/components/bills/personal-notes-panel';
+import { CodeReferencesCard } from '@/components/bills/code-references-card';
 
 interface BillDetailWorkspaceProps {
   bill: {
@@ -286,6 +287,9 @@ export function BillDetailWorkspace({ bill }: BillDetailWorkspaceProps) {
           </CardContent>
         )}
       </Card>
+
+      {/* Affected Statutes */}
+      <CodeReferencesCard billId={bill.billId} />
 
       {/* Full content */}
       {bill.content && (

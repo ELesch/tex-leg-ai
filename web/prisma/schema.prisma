@@ -274,6 +274,9 @@ model BillCodeReference {
   @@index([code])
   @@index([action])
   @@index([billId, code])
+  @@index([code, section])           // Find bills by statute section
+  @@index([code, chapter])           // Find bills by chapter
+  @@index([section])                 // Section-only lookup
   @@map("bill_code_reference")
   @@schema("texlegai")
 }

@@ -1,12 +1,68 @@
 import { prisma } from '@/lib/db/prisma';
-import { BillType, SyncJobStatus } from '@prisma/client';
+import { BillType, SyncJobStatus, CodeReferenceAction } from '@prisma/client';
 import { getSettingTyped, getSetting } from '@/lib/admin/settings';
 import { fetchBillXml, fetchBillTextFromUrl, scanAvailableBills, closeSharedClient } from './ftp-client';
 import { parseBillXml, ParsedBill } from './xml-parser';
 import { logger } from '@/lib/logger';
+import { notifyBillChange, NotificationEventType } from '@/lib/notifications/push-service';
+import { parseCodeReferences, CodeReference } from '@/lib/parsers/code-reference-parser';
 
 // Number of bills to process per batch (keep under Vercel timeout)
 const BATCH_SIZE = 20;
+
+/**
+ * Map code reference action string to Prisma enum
+ */
+function mapCodeReferenceAction(action: 'add' | 'amend' | 'repeal'): CodeReferenceAction {
+  switch (action) {
+    case 'add':
+      return 'ADD';
+    case 'amend':
+      return 'AMEND';
+    case 'repeal':
+      return 'REPEAL';
+    default:
+      return 'AMEND';
+  }
+}
+
+/**
+ * Save code references for a bill
+ */
+async function saveCodeReferences(billDbId: string, content: string | null): Promise<void> {
+  if (!content) return;
+
+  try {
+    const references = parseCodeReferences(content);
+    if (references.length === 0) return;
+
+    // Delete existing references for this bill
+    await prisma.billCodeReference.deleteMany({
+      where: { billId: billDbId },
+    });
+
+    // Create new references
+    await prisma.billCodeReference.createMany({
+      data: references.map((ref: CodeReference) => ({
+        billId: billDbId,
+        code: ref.code,
+        title: ref.title || null,
+        chapter: ref.chapter || '',
+        subchapter: ref.subchapter || null,
+        section: ref.section,
+        subsections: ref.subsections || [],
+        action: mapCodeReferenceAction(ref.action),
+        billSection: ref.billSection,
+      })),
+      skipDuplicates: true,
+    });
+  } catch (error) {
+    logger.error('Error saving code references', {
+      billId: billDbId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+}
 
 interface BillData {
   billId: string;
@@ -318,6 +374,84 @@ async function fetchBillFromFtp(
 }
 
 /**
+ * Detect changes between old and new bill data and send notifications
+ */
+async function detectAndNotifyChanges(
+  billId: string,
+  oldBill: {
+    status: string | null;
+    lastAction: string | null;
+    lastActionDate: Date | null;
+    content: string | null;
+  },
+  newBill: BillData
+): Promise<void> {
+  const notifications: Array<{ type: NotificationEventType; title: string; body: string }> = [];
+
+  // Check for status change
+  if (oldBill.status !== newBill.status && newBill.status) {
+    notifications.push({
+      type: 'statusChange',
+      title: `${billId} Status Changed`,
+      body: `New status: ${newBill.status}`,
+    });
+  }
+
+  // Check for new action
+  if (oldBill.lastAction !== newBill.lastAction && newBill.lastAction) {
+    notifications.push({
+      type: 'newAction',
+      title: `${billId} New Action`,
+      body: newBill.lastAction,
+    });
+  }
+
+  // Check for new version (content changed)
+  if (oldBill.content !== newBill.content && newBill.content) {
+    notifications.push({
+      type: 'newVersion',
+      title: `${billId} New Version Available`,
+      body: 'A new version or amendment has been published.',
+    });
+  }
+
+  // Check for hearing scheduled (look for "hearing" in lastAction)
+  if (
+    newBill.lastAction &&
+    newBill.lastAction.toLowerCase().includes('hearing') &&
+    oldBill.lastAction !== newBill.lastAction
+  ) {
+    notifications.push({
+      type: 'hearingScheduled',
+      title: `${billId} Hearing Scheduled`,
+      body: newBill.lastAction,
+    });
+  }
+
+  // Check for vote recorded (look for "vote" or "passed" in lastAction)
+  if (
+    newBill.lastAction &&
+    (newBill.lastAction.toLowerCase().includes('vote') ||
+      newBill.lastAction.toLowerCase().includes('passed') ||
+      newBill.lastAction.toLowerCase().includes('adopted')) &&
+    oldBill.lastAction !== newBill.lastAction
+  ) {
+    notifications.push({
+      type: 'voteRecorded',
+      title: `${billId} Vote Recorded`,
+      body: newBill.lastAction,
+    });
+  }
+
+  // Send notifications (in background, don't wait)
+  for (const notification of notifications) {
+    notifyBillChange(billId, notification.type, notification.title, notification.body).catch(
+      (err) => logger.error('Failed to send notification', { billId, type: notification.type, error: err })
+    );
+  }
+}
+
+/**
  * Save a bill to the database
  */
 async function saveBill(
@@ -327,10 +461,19 @@ async function saveBill(
   try {
     const existing = await prisma.bill.findUnique({
       where: { billId: bill.billId },
-      select: { id: true },
+      select: {
+        id: true,
+        status: true,
+        lastAction: true,
+        lastActionDate: true,
+        content: true,
+      },
     });
 
     if (existing) {
+      // Detect changes and notify before updating
+      await detectAndNotifyChanges(bill.billId, existing, bill);
+
       await prisma.bill.update({
         where: { billId: bill.billId },
         data: {
@@ -349,9 +492,13 @@ async function saveBill(
           committeeStatus: bill.committeeStatus,
         },
       });
+
+      // Parse and save code references
+      await saveCodeReferences(existing.id, bill.content);
+
       return 'updated';
     } else {
-      await prisma.bill.create({
+      const created = await prisma.bill.create({
         data: {
           sessionId,
           billType: bill.billType,
@@ -373,6 +520,10 @@ async function saveBill(
           committeeStatus: bill.committeeStatus,
         },
       });
+
+      // Parse and save code references
+      await saveCodeReferences(created.id, bill.content);
+
       return 'created';
     }
   } catch (error) {
