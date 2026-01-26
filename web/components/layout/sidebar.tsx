@@ -73,20 +73,6 @@ const navigation: NavItem[] = [
   },
 ];
 
-const secondaryNavigation: NavItem[] = [
-  {
-    name: 'Settings',
-    href: '/settings',
-    icon: Settings,
-    requiresAuth: true,
-    hideWhenNotAuth: true,
-  },
-  {
-    name: 'Help',
-    href: '/help',
-    icon: HelpCircle,
-  },
-];
 
 function NavItemComponent({
   item,
@@ -149,10 +135,6 @@ export function Sidebar({ className }: SidebarProps) {
     setMounted(true);
   }, []);
 
-  // Filter secondary nav items based on auth state
-  const filteredSecondaryNav = secondaryNavigation.filter(
-    (item) => !(item.hideWhenNotAuth && !isAuthenticated)
-  );
 
   return (
     <aside
@@ -201,20 +183,19 @@ export function Sidebar({ className }: SidebarProps) {
           </Link>
         )}
 
-        <div className="mb-2 mt-6 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          More
-        </div>
-        {filteredSecondaryNav.map((item) => {
-          const isActive = pathname === item.href;
-          return (
-            <NavItemComponent
-              key={item.name}
-              item={item}
-              isActive={isActive}
-              isAuthenticated={isAuthenticated}
-            />
-          );
-        })}
+        {/* Help */}
+        <Link
+          href="/help"
+          className={cn(
+            'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+            pathname === '/help'
+              ? 'bg-primary/10 text-primary'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          )}
+        >
+          <HelpCircle className="h-4 w-4" />
+          Help
+        </Link>
 
         {/* Admin Link */}
         {isAdmin && (

@@ -32,6 +32,7 @@ import {
   Sun,
   Moon,
   Monitor,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
@@ -54,7 +55,7 @@ const mobileNavItems: MobileNavItem[] = [
   { name: 'Advanced Search', href: '/search', icon: Search },
   { name: 'Followed Bills', href: '/followed', icon: Bell, requiresAuth: true },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-  { name: 'Settings', href: '/settings', icon: Settings, requiresAuth: true, hideWhenNotAuth: true },
+  { name: 'Teams', href: '/teams', icon: Users, requiresAuth: true, hideWhenNotAuth: true },
   { name: 'Help', href: '/help', icon: HelpCircle },
 ];
 
