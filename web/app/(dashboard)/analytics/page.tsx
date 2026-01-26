@@ -98,16 +98,19 @@ export default function AnalyticsPage() {
   const maxAuthorCount = data.topAuthors.length > 0 ? data.topAuthors[0].count : 1;
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="flex h-full flex-col">
+      {/* Fixed header */}
+      <div className="flex-shrink-0 p-6 pb-0">
         <h1 className="text-3xl font-bold">Analytics</h1>
         <p className="mt-1 text-muted-foreground">
           Statistics and insights about Texas legislation
         </p>
       </div>
 
-      {/* Overview Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Scrollable content */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Overview Cards */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Bills</CardTitle>
@@ -332,6 +335,7 @@ export default function AnalyticsPage() {
             </Link>
           </CardContent>
         </Card>
+      </div>
       </div>
     </div>
   );

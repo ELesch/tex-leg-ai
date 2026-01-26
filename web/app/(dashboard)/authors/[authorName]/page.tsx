@@ -91,27 +91,32 @@ export default async function AuthorPage({ params }: AuthorPageProps) {
   const isAuthenticated = !!session?.user?.id;
 
   return (
-    <div className="space-y-6">
-      {/* Back navigation */}
-      <Link
-        href="/bills"
-        className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft className="mr-1 h-4 w-4" />
-        Back to Bills
-      </Link>
+    <div className="flex h-full flex-col">
+      {/* Fixed header */}
+      <div className="flex-shrink-0 p-6 pb-0 space-y-4">
+        {/* Back navigation */}
+        <Link
+          href="/bills"
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft className="mr-1 h-4 w-4" />
+          Back to Bills
+        </Link>
 
-      {/* 2-column layout */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Main content - Bills */}
-        <div className="flex-1 min-w-0 space-y-4">
-          {/* Header */}
-          <div>
-            <h1 className="text-3xl font-bold">{decodedName}</h1>
-            <p className="mt-1 text-muted-foreground">
-              {bills.length} bill{bills.length !== 1 ? 's' : ''} authored
-            </p>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold">{decodedName}</h1>
+          <p className="mt-1 text-muted-foreground">
+            {bills.length} bill{bills.length !== 1 ? 's' : ''} authored
+          </p>
+        </div>
+      </div>
+
+      {/* Scrollable content */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-6 pt-4">
+        {/* 2-column layout */}
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Main content - Bills */}
+          <div className="flex-1 min-w-0">
 
           {/* Bills table */}
           <div className="rounded-md border">
@@ -150,12 +155,13 @@ export default async function AuthorPage({ params }: AuthorPageProps) {
           </div>
         </div>
 
-        {/* Sidebar - Contacts Panel (only for authenticated users) */}
-        {isAuthenticated && (
-          <div className="w-full lg:w-80 shrink-0">
-            <AuthorPageClient authorId={author.id} authorName={decodedName} />
-          </div>
-        )}
+          {/* Sidebar - Contacts Panel (only for authenticated users) */}
+          {isAuthenticated && (
+            <div className="w-full lg:w-80 shrink-0">
+              <AuthorPageClient authorId={author.id} authorName={decodedName} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -28,6 +28,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { NotificationToggle, BillNotificationToggle } from '@/components/notifications';
 import { Bell, Search, Trash2, Loader2, ExternalLink, FileText } from 'lucide-react';
 
 interface FollowedBill {
@@ -158,32 +159,43 @@ export default function FollowedBillsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Followed Bills</h1>
-          <p className="mt-1 text-muted-foreground">
-            Bills you&apos;re following for updates
-          </p>
+    <div className="flex h-full flex-col">
+      {/* Fixed header */}
+      <div className="flex-shrink-0 p-6 pb-0">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Followed Bills</h1>
+            <p className="mt-1 text-muted-foreground">
+              Bills you&apos;re following for updates
+            </p>
+          </div>
+          <Link href="/bills">
+            <Button>
+              <FileText className="mr-2 h-4 w-4" />
+              Browse Bills
+            </Button>
+          </Link>
         </div>
-        <Link href="/bills">
-          <Button>
-            <FileText className="mr-2 h-4 w-4" />
-            Browse Bills
-          </Button>
-        </Link>
       </div>
+
+      {/* Scrollable content */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-6">
 
       {followedBills.length > 0 && (
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <Bell className="h-5 w-5" />
-              <CardTitle>Your Followed Bills</CardTitle>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Bell className="h-5 w-5" />
+                  <CardTitle>Your Followed Bills</CardTitle>
+                </div>
+                <CardDescription className="mt-1">
+                  {followedBills.length} bill{followedBills.length !== 1 ? 's' : ''} followed
+                </CardDescription>
+              </div>
+              <NotificationToggle />
             </div>
-            <CardDescription>
-              {followedBills.length} bill{followedBills.length !== 1 ? 's' : ''} followed
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Search within followed bills */}
@@ -248,6 +260,11 @@ export default function FollowedBillsPage() {
                                 <ExternalLink className="h-4 w-4" />
                               </Button>
                             </Link>
+                            <BillNotificationToggle
+                              followedBillId={followed.id}
+                              billId={followed.bill.billId}
+                              compact
+                            />
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button
@@ -316,6 +333,7 @@ export default function FollowedBillsPage() {
           </CardContent>
         </Card>
       )}
+      </div>
     </div>
   );
 }

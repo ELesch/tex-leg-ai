@@ -147,16 +147,19 @@ export function SearchContent() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="flex h-full flex-col">
+      {/* Fixed header */}
+      <div className="flex-shrink-0 p-6 pb-0">
         <h1 className="text-3xl font-bold">Advanced Search</h1>
         <p className="mt-1 text-muted-foreground">
           Search bills with advanced filters and boolean operators
         </p>
       </div>
 
-      {/* Search Form */}
-      <Card>
+      {/* Scrollable content */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Search Form */}
+        <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <Search className="h-5 w-5" />
@@ -377,6 +380,7 @@ export function SearchContent() {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

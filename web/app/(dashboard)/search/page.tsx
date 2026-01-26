@@ -6,8 +6,8 @@ export default function SearchPage() {
   return (
     <Suspense
       fallback={
-        <div className="space-y-6">
-          <div>
+        <div className="flex h-full flex-col">
+          <div className="flex-shrink-0 p-6 pb-0">
             <h1 className="text-3xl font-bold">Advanced Search</h1>
             <p className="mt-1 text-muted-foreground">
               Search bills with advanced filters and boolean operators

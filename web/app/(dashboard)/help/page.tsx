@@ -18,16 +18,19 @@ import {
 
 export default function HelpPage() {
   return (
-    <div className="space-y-8">
-      <div>
+    <div className="flex h-full flex-col">
+      {/* Fixed header */}
+      <div className="flex-shrink-0 p-6 pb-0">
         <h1 className="text-3xl font-bold">Help & Documentation</h1>
         <p className="mt-1 text-muted-foreground">
           Learn how to use TexLegAI to track and analyze Texas legislation
         </p>
       </div>
 
-      {/* Quick Links */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {/* Scrollable content */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-8">
+        {/* Quick Links */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
@@ -375,6 +378,7 @@ export default function HelpPage() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

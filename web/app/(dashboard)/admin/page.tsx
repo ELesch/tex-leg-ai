@@ -73,16 +73,19 @@ export default async function AdminDashboardPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="flex h-full flex-col">
+      {/* Fixed header */}
+      <div className="flex-shrink-0 p-6 pb-0">
         <h2 className="text-2xl font-bold tracking-tight">Admin Dashboard</h2>
         <p className="text-muted-foreground">
           System overview and quick actions
         </p>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      {/* Scrollable content */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Stats Cards */}
+        <div className="grid gap-4 md:grid-cols-3">
         {statCards.map((stat) => (
           <Link key={stat.title} href={stat.href}>
             <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
@@ -121,6 +124,7 @@ export default async function AdminDashboardPage() {
             </Link>
           ))}
         </div>
+      </div>
       </div>
     </div>
   );
