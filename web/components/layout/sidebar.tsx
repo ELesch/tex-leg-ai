@@ -2,14 +2,25 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
+import { useEffect, useState } from 'react';
+import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { useTeams } from '@/hooks/use-teams';
+import { Button } from '@/components/ui/button';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   FileText,
   Search,
@@ -21,7 +32,12 @@ import {
   Users,
   Plus,
   Lock,
+  Sun,
+  Moon,
+  Monitor,
+  LogOut,
 } from 'lucide-react';
+import { SyncStatusIndicator } from '@/components/admin/sync-status-indicator';
 
 interface SidebarProps {
   className?: string;
@@ -32,6 +48,7 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   requiresAuth?: boolean;
+  hideWhenNotAuth?: boolean;
 }
 
 const navigation: NavItem[] = [
@@ -64,6 +81,7 @@ const secondaryNavigation: NavItem[] = [
     href: '/settings',
     icon: Settings,
     requiresAuth: true,
+    hideWhenNotAuth: true,
   },
   {
     name: 'Help',
@@ -123,19 +141,38 @@ function NavItemComponent({
 
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const isAdmin = session?.user?.role === 'ADMIN';
   const isAuthenticated = !!session?.user;
   const { teams, isLoading: teamsLoading } = useTeams();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Filter secondary nav items based on auth state
+  const filteredSecondaryNav = secondaryNavigation.filter(
+    (item) => !(item.hideWhenNotAuth && !isAuthenticated)
+  );
 
   return (
     <aside
       className={cn(
-        'w-64 flex-col border-r bg-background p-4',
+        'w-64 flex-col border-r bg-background',
         className
       )}
     >
-      <nav className="flex flex-1 flex-col gap-1">
+      {/* Logo at top */}
+      <div className="border-b p-4">
+        <Link href="/bills" className="flex items-center gap-2">
+          <FileText className="h-6 w-6 text-primary" />
+          <span className="text-xl font-bold">TexLegAI</span>
+        </Link>
+      </div>
+
+      <nav className="flex flex-1 flex-col gap-1 p-4">
         <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Navigation
         </div>
@@ -207,7 +244,7 @@ export function Sidebar({ className }: SidebarProps) {
         <div className="mb-2 mt-6 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           More
         </div>
-        {secondaryNavigation.map((item) => {
+        {filteredSecondaryNav.map((item) => {
           const isActive = pathname === item.href;
           return (
             <NavItemComponent
@@ -241,15 +278,120 @@ export function Sidebar({ className }: SidebarProps) {
         )}
       </nav>
 
-      {/* Session info */}
-      <div className="mt-auto border-t pt-4">
-        <div className="rounded-md bg-muted p-3">
-          <p className="text-xs font-medium text-muted-foreground">
-            Current Session
+      {/* Bottom section: Theme, Auth, User */}
+      <div className="mt-auto border-t p-4">
+        {/* Sync Status for Admins */}
+        {isAdmin && (
+          <div className="mb-4">
+            <SyncStatusIndicator isAdmin={true} />
+          </div>
+        )}
+
+        {/* Theme Switcher */}
+        <div className="mb-4">
+          <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Theme
           </p>
-          <p className="mt-1 text-sm font-semibold">89th Regular Session</p>
-          <p className="text-xs text-muted-foreground">2025</p>
+          <div className="flex gap-1">
+            <Button
+              variant={mounted && theme === 'light' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="flex-1"
+              onClick={() => setTheme('light')}
+            >
+              <Sun className="mr-1 h-4 w-4" />
+              Light
+            </Button>
+            <Button
+              variant={mounted && theme === 'dark' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="flex-1"
+              onClick={() => setTheme('dark')}
+            >
+              <Moon className="mr-1 h-4 w-4" />
+              Dark
+            </Button>
+            <Button
+              variant={mounted && theme === 'system' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="flex-1"
+              onClick={() => setTheme('system')}
+            >
+              <Monitor className="mr-1 h-4 w-4" />
+              Auto
+            </Button>
+          </div>
         </div>
+
+        {/* Auth Section */}
+        {status === 'loading' ? (
+          <div className="flex items-center gap-3 p-2">
+            <div className="h-10 w-10 animate-pulse rounded-full bg-muted" />
+            <div className="flex-1">
+              <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+            </div>
+          </div>
+        ) : isAuthenticated ? (
+          <div className="flex items-center gap-3 rounded-md p-2 hover:bg-muted">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex w-full items-center gap-3 text-left">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    {session?.user?.name?.[0]?.toUpperCase() ||
+                      session?.user?.email?.[0]?.toUpperCase() ||
+                      'U'}
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="truncate text-sm font-medium">
+                      {session?.user?.name || 'User'}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {session?.user?.email}
+                    </p>
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="end" side="top">
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">
+                      {session?.user?.name || 'User'}
+                    </p>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      {session?.user?.email}
+                    </p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/settings" className="cursor-pointer">
+                    <Settings className="mr-2 h-4 w-4" />
+                    Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="cursor-pointer text-destructive focus:text-destructive"
+                  onClick={() => signOut({ callbackUrl: '/' })}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <Link href="/login">
+              <Button variant="outline" className="w-full">
+                Sign in
+              </Button>
+            </Link>
+            <Link href="/register">
+              <Button className="w-full">Sign up</Button>
+            </Link>
+          </div>
+        )}
       </div>
     </aside>
   );
