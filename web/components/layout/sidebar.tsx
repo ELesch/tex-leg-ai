@@ -160,19 +160,19 @@ export function Sidebar({ className }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'w-64 flex-col border-r bg-background',
+        'w-64 flex-col border-r bg-background h-screen',
         className
       )}
     >
       {/* Logo at top */}
-      <div className="border-b p-4">
+      <div className="flex-shrink-0 border-b p-4">
         <Link href="/bills" className="flex items-center gap-2">
           <FileText className="h-6 w-6 text-primary" />
           <span className="text-xl font-bold">TexLegAI</span>
         </Link>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 p-4">
+      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
         <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Navigation
         </div>
@@ -279,7 +279,7 @@ export function Sidebar({ className }: SidebarProps) {
       </nav>
 
       {/* Bottom section: Theme, Auth, User */}
-      <div className="mt-auto border-t p-4">
+      <div className="flex-shrink-0 border-t p-4">
         {/* Sync Status for Admins */}
         {isAdmin && (
           <div className="mb-4">
