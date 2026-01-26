@@ -3,7 +3,7 @@
 ## Repository
 - **GitHub**: https://github.com/ELesch/tex-leg-ai.git
 - **Branch**: main
-- **Deployment**: Vercel (https://web-pcl-bonding.vercel.app)
+- **Deployment**: Vercel (https://texlegai.vercel.app)
 
 ## Project Structure
 ```
@@ -48,8 +48,20 @@ TexLegAI/
 - **Testing Library** (React, Jest-DOM)
 
 ### Deployment
-- **Vercel** (production)
-- **Vercel CLI** available for deployments
+- **Vercel** (production) - auto-deploys from GitHub on push to main
+- **Vercel CLI** available for status checks and debugging
+
+## Deployment Workflow
+
+**CRITICAL: Vercel deploys from GitHub, NOT from local files.**
+
+When deploying changes:
+1. **Commit changes:** `git add <files> && git commit -m "message"`
+2. **Push to GitHub:** `git push origin main`
+3. **Vercel auto-deploys** - watch for the deployment to complete
+4. **Verify:** `vercel ls` to check status is `● Ready`
+
+**NEVER use `vercel --prod` as the primary deployment method.** It deploys local files which bypasses git history and can cause confusion. Only use it for debugging build failures.
 
 ## Common Commands
 
@@ -80,10 +92,13 @@ npm run test:coverage # Coverage report
 
 ### Deployment
 ```bash
-cd web
-vercel              # Preview deployment
-vercel --prod       # Production deployment
-vercel ls           # List deployments
+# Push to GitHub - Vercel auto-deploys from main branch
+git add <files>
+git commit -m "message"
+git push origin main
+
+# Run Vercel commands from root directory (not web/)
+vercel ls           # List deployments and check status
 vercel logs <url>   # View logs
 ```
 
@@ -92,7 +107,7 @@ vercel logs <url>   # View logs
 
 1. **Check deployment status and timestamp:**
    ```bash
-   cd web && vercel ls
+   vercel ls
    ```
    - Look for `● Ready` status on the latest deployment
    - `● Error` means it failed
@@ -100,10 +115,10 @@ vercel logs <url>   # View logs
 
 2. **If deployment shows Error:**
    ```bash
-   # Use --prod to deploy manually and see full build output
-   cd web && vercel --prod
+   # Check the build logs on Vercel dashboard or use inspect
+   vercel inspect <deployment-url>
    ```
-   This shows the complete build log including any errors.
+   If you need to see full build output for debugging, you can use `vercel --prod` but remember this deploys local files, not the GitHub repo.
 
 3. **Check runtime logs after deployment:**
    ```bash
@@ -112,7 +127,7 @@ vercel logs <url>   # View logs
    Watch for any runtime errors when testing the deployed app.
 
 4. **Verify the app is working:**
-   - Visit https://web-pcl-bonding.vercel.app in browser
+   - Visit https://texlegai.vercel.app in browser
    - Test a key feature (e.g., navigate to a bill page)
    - Check browser console for any errors
 
@@ -138,11 +153,9 @@ Required in Vercel project settings:
 ## Debugging
 
 ### Vercel CLI
-Always run Vercel commands from the `web/` directory.
+Always run Vercel commands from the root `TxLegAI/` directory (not `web/`).
 
 ```bash
-cd web
-
 # List recent deployments and their status
 vercel ls
 
