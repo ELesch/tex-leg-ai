@@ -6,7 +6,6 @@ import { useSession, signOut } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
-import { useTeams } from '@/hooks/use-teams';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -30,7 +29,6 @@ import {
   HelpCircle,
   Shield,
   Users,
-  Plus,
   Lock,
   Sun,
   Moon,
@@ -144,7 +142,6 @@ export function Sidebar({ className }: SidebarProps) {
   const { data: session, status } = useSession();
   const isAdmin = session?.user?.role === 'ADMIN';
   const isAuthenticated = !!session?.user;
-  const { teams, isLoading: teamsLoading } = useTeams();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -188,57 +185,20 @@ export function Sidebar({ className }: SidebarProps) {
           );
         })}
 
-        {/* Teams Section */}
+        {/* Teams - requires auth */}
         {session?.user && (
-          <>
-            <div className="mb-2 mt-6 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Teams
-            </div>
-            {teamsLoading ? (
-              <div className="px-3 py-2">
-                <div className="h-4 w-24 animate-pulse rounded bg-muted" />
-              </div>
-            ) : teams.length > 0 ? (
-              teams.slice(0, 5).map((team) => {
-                const isActive = pathname === `/teams/${team.slug}` || pathname.startsWith(`/teams/${team.slug}/`);
-                return (
-                  <Link
-                    key={team.id}
-                    href={`/teams/${team.slug}`}
-                    className={cn(
-                      'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                      isActive
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
-                  >
-                    <Users className="h-4 w-4" />
-                    <span className="truncate">{team.name}</span>
-                  </Link>
-                );
-              })
-            ) : null}
-            <Link
-              href="/teams/new"
-              className={cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                pathname === '/teams/new'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )}
-            >
-              <Plus className="h-4 w-4" />
-              Create Team
-            </Link>
-            {teams.length > 5 && (
-              <Link
-                href="/teams"
-                className="flex items-center gap-3 rounded-md px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
-              >
-                View all {teams.length} teams →
-              </Link>
+          <Link
+            href="/teams"
+            className={cn(
+              'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+              pathname === '/teams' || pathname.startsWith('/teams/')
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
             )}
-          </>
+          >
+            <Users className="h-4 w-4" />
+            Teams
+          </Link>
         )}
 
         <div className="mb-2 mt-6 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
