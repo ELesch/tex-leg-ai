@@ -61,6 +61,12 @@ model User {
   notificationPreference NotificationPreference?
   billNotifications      BillNotification[]
 
+  // Statute browser relations
+  statuteMarkers         StatuteMarker[]
+  statuteNotes           StatuteNote[]
+  statuteAnnotations     StatuteAnnotation[]
+  statuteViewPreference  StatuteViewPreference?
+
   @@index([email])
   @@schema("texlegai")
 }
@@ -1024,6 +1030,9 @@ model Statute {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  // User annotations
+  annotations     StatuteAnnotation[]
+
   @@unique([codeId, sectionNum, version])
   @@index([codeId, isCurrent])
   @@index([codeId, chapterNum, isCurrent])
@@ -1050,5 +1059,89 @@ model StatuteSyncJob {
   updatedAt       DateTime      @updatedAt
 
   @@map("statute_sync_job")
+  @@schema("texlegai")
+}
+
+// ============================================
+// Statute Browser Enhancement Models
+// ============================================
+
+enum MarkerColor {
+  RED
+  ORANGE
+  YELLOW
+  GREEN
+  BLUE
+  PURPLE
+
+  @@schema("texlegai")
+}
+
+// Colored markers on codes/chapters/subchapters for quick reference
+model StatuteMarker {
+  id         String      @id @default(cuid())
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeAbbr   String
+  chapterNum String?     // null = code-level
+  subchapter String?     // null = chapter-level
+  color      MarkerColor @default(YELLOW)
+  label      String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@unique([userId, codeAbbr, chapterNum, subchapter])
+  @@index([userId])
+  @@map("statute_marker")
+  @@schema("texlegai")
+}
+
+// User notes at any hierarchy level (code, chapter, subchapter)
+model StatuteNote {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeAbbr   String
+  chapterNum String?
+  subchapter String?
+  content    String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId, codeAbbr])
+  @@map("statute_note")
+  @@schema("texlegai")
+}
+
+// Text highlighting with comments on statute sections
+model StatuteAnnotation {
+  id           String         @id @default(cuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  statuteId    String
+  statute      Statute        @relation(fields: [statuteId], references: [id], onDelete: Cascade)
+  startOffset  Int
+  endOffset    Int
+  selectedText String         @db.Text
+  content      String         @db.Text
+  type         AnnotationType @default(NOTE)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([userId, statuteId])
+  @@map("statute_annotation")
+  @@schema("texlegai")
+}
+
+// User preferences for statute viewer (hide metadata, etc.)
+model StatuteViewPreference {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hideRevisionHistory Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("statute_view_preference")
   @@schema("texlegai")
 }

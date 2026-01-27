@@ -5,7 +5,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search, BookOpen } from 'lucide-react';
-import { TreeNode, TreeNodeData, NodeType } from './tree-node';
+import { TreeNode, TreeNodeData, NodeType, MarkerData, MarkerColor } from './tree-node';
+import { useSession } from 'next-auth/react';
 
 interface CodeData {
   id: string;
@@ -37,18 +38,130 @@ interface SectionData {
 type ExpandedNodes = Set<string>;
 type LoadedChildren = Map<string, TreeNodeData[]>;
 
+interface ApiMarker {
+  id: string;
+  codeAbbr: string;
+  chapterNum: string | null;
+  subchapter: string | null;
+  color: MarkerColor;
+  label: string | null;
+}
+
+// Map key format: "codeAbbr" | "codeAbbr:chapterNum" | "codeAbbr:chapterNum:subchapter"
+type MarkersMap = Map<string, MarkerData>;
+
 interface StatuteTreeProps {
   onSelectSection: (codeAbbr: string, sectionNum: string) => void;
+  onSelectChapter?: (codeAbbr: string, chapterNum: string) => void;
   selectedSection: string | null; // Format: "CODE-sectionNum"
 }
 
-export function StatuteTree({ onSelectSection, selectedSection }: StatuteTreeProps) {
+export function StatuteTree({ onSelectSection, onSelectChapter, selectedSection }: StatuteTreeProps) {
+  const { data: session } = useSession();
   const [codes, setCodes] = useState<CodeData[]>([]);
   const [isLoadingCodes, setIsLoadingCodes] = useState(true);
   const [expandedNodes, setExpandedNodes] = useState<ExpandedNodes>(new Set());
   const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
   const [loadedChildren, setLoadedChildren] = useState<LoadedChildren>(new Map());
   const [filter, setFilter] = useState('');
+  const [markers, setMarkers] = useState<MarkersMap>(new Map());
+
+  // Build marker key from parts
+  const getMarkerKey = useCallback((codeAbbr: string, chapterNum?: string | null, subchapter?: string | null): string => {
+    if (subchapter) return `${codeAbbr}:${chapterNum}:${subchapter}`;
+    if (chapterNum) return `${codeAbbr}:${chapterNum}`;
+    return codeAbbr;
+  }, []);
+
+  // Fetch markers when logged in
+  useEffect(() => {
+    if (!session?.user) {
+      setMarkers(new Map());
+      return;
+    }
+
+    async function fetchMarkers() {
+      try {
+        const response = await fetch('/api/statutes/markers');
+        if (response.ok) {
+          const data = await response.json();
+          const markersMap = new Map<string, MarkerData>();
+          for (const m of data.markers as ApiMarker[]) {
+            const key = getMarkerKey(m.codeAbbr, m.chapterNum, m.subchapter);
+            markersMap.set(key, {
+              id: m.id,
+              color: m.color,
+              label: m.label || undefined,
+            });
+          }
+          setMarkers(markersMap);
+        }
+      } catch (error) {
+        console.error('Error fetching markers:', error);
+      }
+    }
+    fetchMarkers();
+  }, [session?.user, getMarkerKey]);
+
+  // Add or update a marker
+  const handleAddMarker = useCallback(async (
+    codeAbbr: string,
+    color: MarkerColor,
+    chapterNum?: string | null,
+    subchapter?: string | null
+  ) => {
+    if (!session?.user) return;
+
+    try {
+      const response = await fetch('/api/statutes/markers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codeAbbr,
+          chapterNum: chapterNum || null,
+          subchapter: subchapter || null,
+          color,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const key = getMarkerKey(codeAbbr, chapterNum, subchapter);
+        setMarkers(prev => {
+          const next = new Map(prev);
+          next.set(key, {
+            id: data.marker.id,
+            color: data.marker.color,
+            label: data.marker.label || undefined,
+          });
+          return next;
+        });
+      }
+    } catch (error) {
+      console.error('Error adding marker:', error);
+    }
+  }, [session?.user, getMarkerKey]);
+
+  // Remove a marker
+  const handleRemoveMarker = useCallback(async (markerId: string, markerKey: string) => {
+    if (!session?.user) return;
+
+    try {
+      const response = await fetch(`/api/statutes/markers/${markerId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setMarkers(prev => {
+          const next = new Map(prev);
+          next.delete(markerKey);
+          return next;
+        });
+      }
+    } catch (error) {
+      console.error('Error removing marker:', error);
+    }
+  }, [session?.user]);
 
   // Fetch top-level codes on mount
   useEffect(() => {
@@ -217,6 +330,19 @@ export function StatuteTree({ onSelectSection, selectedSection }: StatuteTreePro
 
       const level = type === 'chapter' ? 1 : type === 'subchapter' ? 2 : type === 'section' && parts.length > 3 ? 3 : 2;
 
+      // Get marker for this node (only for code/chapter/subchapter)
+      const markerKey = type !== 'section' ? getMarkerKey(codeAbbr, chapterNum, subchapter) : null;
+      const marker = markerKey ? markers.get(markerKey) : undefined;
+
+      // Handle chapter click for full chapter view
+      const handleSelect = () => {
+        if (child.sectionNum && child.codeAbbr) {
+          handleSelectSection(child.codeAbbr, child.sectionNum);
+        } else if (type === 'chapter' && codeAbbr && chapterNum && onSelectChapter) {
+          onSelectChapter(codeAbbr, chapterNum);
+        }
+      };
+
       return (
         <TreeNode
           key={child.id}
@@ -226,7 +352,10 @@ export function StatuteTree({ onSelectSection, selectedSection }: StatuteTreePro
           isSelected={isSelected}
           isLoading={isLoading}
           onToggle={() => toggleNode(child.id, type, codeAbbr, chapterNum, subchapter)}
-          onSelect={() => child.sectionNum && child.codeAbbr && handleSelectSection(child.codeAbbr, child.sectionNum)}
+          onSelect={handleSelect}
+          marker={marker}
+          onAddMarker={session?.user ? (color) => handleAddMarker(codeAbbr, color, chapterNum, subchapter) : undefined}
+          onRemoveMarker={marker && session?.user ? () => handleRemoveMarker(marker.id, markerKey!) : undefined}
         >
           {isExpanded && renderChildren(child.id)}
         </TreeNode>
@@ -274,6 +403,10 @@ export function StatuteTree({ onSelectSection, selectedSection }: StatuteTreePro
               const isExpanded = expandedNodes.has(nodeKey);
               const isLoading = loadingNodes.has(nodeKey);
 
+              // Get marker for this code
+              const markerKey = getMarkerKey(code.abbreviation);
+              const marker = markers.get(markerKey);
+
               const nodeData: TreeNodeData = {
                 id: nodeKey,
                 type: 'code',
@@ -293,6 +426,9 @@ export function StatuteTree({ onSelectSection, selectedSection }: StatuteTreePro
                   isLoading={isLoading}
                   onToggle={() => toggleNode(nodeKey, 'code', code.abbreviation)}
                   onSelect={() => {}}
+                  marker={marker}
+                  onAddMarker={session?.user ? (color) => handleAddMarker(code.abbreviation, color) : undefined}
+                  onRemoveMarker={marker && session?.user ? () => handleRemoveMarker(marker.id, markerKey) : undefined}
                 >
                   {isExpanded && renderChildren(nodeKey)}
                 </TreeNode>
