@@ -94,8 +94,8 @@ export function TreeNode({
   // Handler for label/content area
   const handleLabelClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isSection || node.type === 'chapter') {
-      onSelect();  // Show content for sections AND chapters
+    if (isSection || node.type === 'chapter' || node.type === 'subchapter') {
+      onSelect();  // Show content for sections, chapters, AND subchapters
     } else if (hasChildren) {
       onToggle();  // Just expand for codes (no viewable content)
     }
@@ -104,8 +104,8 @@ export function TreeNode({
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      if (isSection || node.type === 'chapter') {
-        onSelect();  // Show content for sections AND chapters
+      if (isSection || node.type === 'chapter' || node.type === 'subchapter') {
+        onSelect();  // Show content for sections, chapters, AND subchapters
       } else if (hasChildren) {
         onToggle();
       }

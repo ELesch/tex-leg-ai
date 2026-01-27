@@ -36,6 +36,7 @@ import { AffectingBillPane } from './affecting-bill-pane';
 import { AnnotatableStatuteText, StatuteAnnotation, SearchMatch } from './annotatable-statute-text';
 import { ViewPreferencesToggle } from './view-preferences-toggle';
 import { ChapterFullView } from './chapter-full-view';
+import { SubchapterFullView } from './subchapter-full-view';
 import {
   StatuteScrollbarMarkers,
   ScrollbarMarker,
@@ -64,7 +65,7 @@ interface CodeData {
   name: string;
 }
 
-type ViewMode = 'section' | 'chapter';
+type ViewMode = 'section' | 'chapter' | 'subchapter';
 
 interface StatuteWorkspaceLayoutProps {
   className?: string;
@@ -77,6 +78,7 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
+  const [selectedSubchapter, setSelectedSubchapter] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('section');
 
   // Data state
@@ -174,6 +176,7 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
     setSelectedCode(codeAbbr);
     setSelectedSection(sectionNum);
     setSelectedChapter(null);
+    setSelectedSubchapter(null);
     setViewMode('section');
     setSearchMatches([]);
     setCurrentMatchIndex(0);
@@ -183,8 +186,20 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
   const handleSelectChapter = useCallback((codeAbbr: string, chapterNum: string) => {
     setSelectedCode(codeAbbr);
     setSelectedChapter(chapterNum);
+    setSelectedSubchapter(null);
     setSelectedSection(null);
     setViewMode('chapter');
+    setSearchMatches([]);
+    setCurrentMatchIndex(0);
+  }, []);
+
+  // Handle subchapter selection
+  const handleSelectSubchapter = useCallback((codeAbbr: string, chapterNum: string, subchapter: string) => {
+    setSelectedCode(codeAbbr);
+    setSelectedChapter(chapterNum);
+    setSelectedSubchapter(subchapter);
+    setSelectedSection(null);
+    setViewMode('subchapter');
     setSearchMatches([]);
     setCurrentMatchIndex(0);
   }, []);
@@ -372,6 +387,7 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
                   <StatuteTree
                     onSelectSection={handleSelectSection}
                     onSelectChapter={handleSelectChapter}
+                    onSelectSubchapter={handleSelectSubchapter}
                     selectedSection={selectionKey}
                   />
                 </div>
@@ -395,7 +411,7 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
         <ResizablePanel id="main-panel" defaultSize={55} minSize={30} className="min-w-0">
           <div className="flex flex-col h-full overflow-hidden">
             {/* Empty state */}
-            {!selectedCode && !selectedSection && !selectedChapter && (
+            {!selectedCode && !selectedSection && !selectedChapter && !selectedSubchapter && (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                 <Scale className="h-16 w-16 mb-4 opacity-50" />
                 <p className="text-lg font-medium">Select a statute section</p>
@@ -426,6 +442,17 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
               <ChapterFullView
                 codeAbbr={selectedCode}
                 chapterNum={selectedChapter}
+                hideRevisionHistory={hideRevisionHistory}
+                onSectionClick={(sectionNum) => handleSelectSection(selectedCode, sectionNum)}
+              />
+            )}
+
+            {/* Subchapter view */}
+            {viewMode === 'subchapter' && selectedCode && selectedChapter && selectedSubchapter && (
+              <SubchapterFullView
+                codeAbbr={selectedCode}
+                chapterNum={selectedChapter}
+                subchapter={selectedSubchapter}
                 hideRevisionHistory={hideRevisionHistory}
                 onSectionClick={(sectionNum) => handleSelectSection(selectedCode, sectionNum)}
               />

@@ -53,10 +53,11 @@ type MarkersMap = Map<string, MarkerData>;
 interface StatuteTreeProps {
   onSelectSection: (codeAbbr: string, sectionNum: string) => void;
   onSelectChapter?: (codeAbbr: string, chapterNum: string) => void;
+  onSelectSubchapter?: (codeAbbr: string, chapterNum: string, subchapter: string) => void;
   selectedSection: string | null; // Format: "CODE-sectionNum"
 }
 
-export function StatuteTree({ onSelectSection, onSelectChapter, selectedSection }: StatuteTreeProps) {
+export function StatuteTree({ onSelectSection, onSelectChapter, onSelectSubchapter, selectedSection }: StatuteTreeProps) {
   const { data: session } = useSession();
   const [codes, setCodes] = useState<CodeData[]>([]);
   const [isLoadingCodes, setIsLoadingCodes] = useState(true);
@@ -334,12 +335,14 @@ export function StatuteTree({ onSelectSection, onSelectChapter, selectedSection 
       const markerKey = type !== 'section' ? getMarkerKey(codeAbbr, chapterNum, subchapter) : null;
       const marker = markerKey ? markers.get(markerKey) : undefined;
 
-      // Handle chapter click for full chapter view
+      // Handle chapter/subchapter click for full view
       const handleSelect = () => {
         if (child.sectionNum && child.codeAbbr) {
           handleSelectSection(child.codeAbbr, child.sectionNum);
         } else if (type === 'chapter' && codeAbbr && chapterNum && onSelectChapter) {
           onSelectChapter(codeAbbr, chapterNum);
+        } else if (type === 'subchapter' && codeAbbr && chapterNum && subchapter && onSelectSubchapter) {
+          onSelectSubchapter(codeAbbr, chapterNum, subchapter);
         }
       };
 
