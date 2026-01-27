@@ -58,6 +58,24 @@
   }
 }
 
+/* Resizable panels - ensure panels can shrink */
+[data-panel] {
+  overflow: hidden;
+}
+
+[data-panel-group] {
+  height: 100%;
+  width: 100%;
+}
+
+[data-panel-resize-handle-enabled] {
+  cursor: col-resize;
+}
+
+[data-panel-group-direction="vertical"] [data-panel-resize-handle-enabled] {
+  cursor: row-resize;
+}
+
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
