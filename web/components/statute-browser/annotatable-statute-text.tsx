@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { StatuteAnnotationPopover } from './statute-annotation-popover';
 import { cn } from '@/lib/utils';
+import { getIndentLevel, decodeHtmlEntities } from '@/lib/utils/statute-text-formatter';
 import {
   StickyNote,
   HelpCircle,
@@ -297,7 +298,7 @@ export function AnnotatableStatuteText({
   onAnnotationDelete,
   onMatchClick,
 }: AnnotatableStatuteTextProps) {
-  const containerRef = useRef<HTMLPreElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [pendingSelection, setPendingSelection] = useState<{
     startOffset: number;
@@ -305,9 +306,13 @@ export function AnnotatableStatuteText({
     selectedText: string;
   } | null>(null);
 
-  // Optionally filter revision history
+  // Optionally filter revision history and decode HTML entities
   const displayContent = useMemo(
-    () => hideRevisionHistory ? filterRevisionHistory(content) : content,
+    () => {
+      let processed = hideRevisionHistory ? filterRevisionHistory(content) : content;
+      processed = decodeHtmlEntities(processed);
+      return processed;
+    },
     [content, hideRevisionHistory]
   );
 
@@ -316,6 +321,46 @@ export function AnnotatableStatuteText({
     () => buildTextSegments(displayContent, annotations, searchMatches),
     [displayContent, annotations, searchMatches]
   );
+
+  // Split content into lines with their start offsets for indentation
+  const linesWithOffsets = useMemo(() => {
+    const lines: { text: string; startOffset: number; endOffset: number; indentLevel: number }[] = [];
+    let offset = 0;
+    const splitLines = displayContent.split('\n');
+
+    for (let i = 0; i < splitLines.length; i++) {
+      const lineText = splitLines[i];
+      const endOffset = offset + lineText.length;
+      lines.push({
+        text: lineText,
+        startOffset: offset,
+        endOffset: endOffset,
+        indentLevel: getIndentLevel(lineText),
+      });
+      offset = endOffset + 1; // +1 for the newline character
+    }
+    return lines;
+  }, [displayContent]);
+
+  // Get segments for a specific line
+  const getSegmentsForLine = useCallback((lineStart: number, lineEnd: number) => {
+    return segments.filter(segment => {
+      // Segment overlaps with this line
+      return segment.start < lineEnd && segment.end > lineStart;
+    }).map(segment => {
+      // Clip segment to line boundaries
+      const clippedStart = Math.max(segment.start, lineStart);
+      const clippedEnd = Math.min(segment.end, lineEnd);
+      const clippedText = displayContent.slice(clippedStart, clippedEnd);
+
+      return {
+        ...segment,
+        text: clippedText,
+        start: clippedStart,
+        end: clippedEnd,
+      };
+    });
+  }, [segments, displayContent]);
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
@@ -368,22 +413,38 @@ export function AnnotatableStatuteText({
 
   return (
     <div className="relative">
-      <pre
+      <div
         ref={containerRef}
-        className="whitespace-pre-wrap font-mono text-sm leading-relaxed"
+        className="font-mono text-sm"
         onContextMenu={handleContextMenu}
       >
-        {segments.map((segment, index) => (
-          <HighlightedText
-            key={`${segment.start}-${segment.end}-${index}`}
-            segment={segment}
-            onAnnotationClick={onAnnotationClick}
-            onAnnotationEdit={onAnnotationEdit}
-            onAnnotationDelete={onAnnotationDelete}
-            onMatchClick={onMatchClick}
-          />
-        ))}
-      </pre>
+        {linesWithOffsets.map((line, lineIndex) => {
+          const lineSegments = getSegmentsForLine(line.startOffset, line.endOffset);
+
+          return (
+            <div
+              key={lineIndex}
+              className="leading-relaxed whitespace-pre-wrap"
+              style={{ marginLeft: line.indentLevel > 0 ? `${line.indentLevel * 1.5}rem` : undefined }}
+            >
+              {lineSegments.length > 0 ? (
+                lineSegments.map((segment, segIndex) => (
+                  <HighlightedText
+                    key={`${segment.start}-${segment.end}-${segIndex}`}
+                    segment={segment}
+                    onAnnotationClick={onAnnotationClick}
+                    onAnnotationEdit={onAnnotationEdit}
+                    onAnnotationDelete={onAnnotationDelete}
+                    onMatchClick={onMatchClick}
+                  />
+                ))
+              ) : (
+                line.text || '\u00A0'
+              )}
+            </div>
+          );
+        })}
+      </div>
 
       <SelectionMenu
         position={menuPosition}
