@@ -23,6 +23,13 @@ interface CodeStats {
   billCount: number;
 }
 
+interface ChapterStats {
+  chapter: string;
+  referenceCount: number;
+  billCount: number;
+  sectionCount: number;
+}
+
 interface SectionStats {
   section: string;
   chapter: string;
@@ -64,13 +71,16 @@ function StatutesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedCode = searchParams.get('code');
+  const selectedChapter = searchParams.get('chapter');
   const selectedSection = searchParams.get('section');
 
   const [codeFilter, setCodeFilter] = useState('');
   const [codes, setCodes] = useState<CodeStats[]>([]);
+  const [chapters, setChapters] = useState<ChapterStats[]>([]);
   const [sections, setSections] = useState<SectionStats[]>([]);
   const [bills, setBills] = useState<BillReference[]>([]);
   const [isLoadingCodes, setIsLoadingCodes] = useState(true);
+  const [isLoadingChapters, setIsLoadingChapters] = useState(false);
   const [isLoadingSections, setIsLoadingSections] = useState(false);
   const [isLoadingBills, setIsLoadingBills] = useState(false);
 
@@ -92,9 +102,33 @@ function StatutesPageContent() {
     fetchCodes();
   }, []);
 
-  // Fetch sections when a code is selected
+  // Fetch chapters when a code is selected
   useEffect(() => {
     if (!selectedCode) {
+      setChapters([]);
+      return;
+    }
+
+    async function fetchChapters() {
+      setIsLoadingChapters(true);
+      try {
+        const response = await fetch(`/api/codes/${encodeURIComponent(selectedCode!)}/chapters`);
+        if (response.ok) {
+          const data = await response.json();
+          setChapters(data.chapters);
+        }
+      } catch (error) {
+        console.error('Error fetching chapters:', error);
+      } finally {
+        setIsLoadingChapters(false);
+      }
+    }
+    fetchChapters();
+  }, [selectedCode]);
+
+  // Fetch sections when a chapter is selected
+  useEffect(() => {
+    if (!selectedCode || !selectedChapter) {
       setSections([]);
       return;
     }
@@ -102,7 +136,9 @@ function StatutesPageContent() {
     async function fetchSections() {
       setIsLoadingSections(true);
       try {
-        const response = await fetch(`/api/codes/${encodeURIComponent(selectedCode!)}/sections`);
+        const response = await fetch(
+          `/api/codes/${encodeURIComponent(selectedCode!)}/sections?chapter=${encodeURIComponent(selectedChapter!)}`
+        );
         if (response.ok) {
           const data = await response.json();
           setSections(data.sections);
@@ -114,7 +150,7 @@ function StatutesPageContent() {
       }
     }
     fetchSections();
-  }, [selectedCode]);
+  }, [selectedCode, selectedChapter]);
 
   // Fetch bills when a section is selected
   useEffect(() => {
@@ -150,10 +186,18 @@ function StatutesPageContent() {
     router.push(`/statutes?code=${encodeURIComponent(code)}`);
   };
 
-  const handleSelectSection = (section: string) => {
+  const handleSelectChapter = (chapter: string) => {
     if (selectedCode) {
       router.push(
-        `/statutes?code=${encodeURIComponent(selectedCode)}&section=${encodeURIComponent(section)}`
+        `/statutes?code=${encodeURIComponent(selectedCode)}&chapter=${encodeURIComponent(chapter)}`
+      );
+    }
+  };
+
+  const handleSelectSection = (section: string) => {
+    if (selectedCode && selectedChapter) {
+      router.push(
+        `/statutes?code=${encodeURIComponent(selectedCode)}&chapter=${encodeURIComponent(selectedChapter)}&section=${encodeURIComponent(section)}`
       );
     }
   };
@@ -171,10 +215,10 @@ function StatutesPageContent() {
         </p>
       </div>
 
-      {/* Main content - 3 columns */}
-      <div className="flex min-h-0 flex-1 gap-4 px-6 pb-6">
+      {/* Main content - 4 columns */}
+      <div className="flex min-h-0 flex-1 gap-3 px-6 pb-6">
         {/* Column 1: Code List */}
-        <Card className="flex w-72 flex-col">
+        <Card className="flex w-56 flex-col">
           <CardHeader className="flex-shrink-0 pb-2">
             <CardTitle className="text-sm font-medium">Texas Codes</CardTitle>
             <div className="relative mt-2">
@@ -225,18 +269,65 @@ function StatutesPageContent() {
           </CardContent>
         </Card>
 
-        {/* Column 2: Sections */}
-        <Card className="flex w-80 flex-col">
+        {/* Column 2: Chapters */}
+        <Card className="flex w-56 flex-col">
           <CardHeader className="flex-shrink-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              {selectedCode ? `${selectedCode} Sections` : 'Select a Code'}
+              {selectedCode ? 'Chapters' : 'Select a Code'}
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0">
             <ScrollArea className="h-full">
               {!selectedCode ? (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground p-4">
-                  Select a code to view its sections
+                  Select a code to view chapters
+                </div>
+              ) : isLoadingChapters ? (
+                <div className="space-y-2 p-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))}
+                </div>
+              ) : chapters.length === 0 ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  No chapters found for this code.
+                </div>
+              ) : (
+                <div className="space-y-1 p-2">
+                  {chapters.map((chapter) => (
+                    <Button
+                      key={chapter.chapter}
+                      variant={selectedChapter === chapter.chapter ? 'secondary' : 'ghost'}
+                      className="w-full justify-start text-left h-auto py-2"
+                      onClick={() => handleSelectChapter(chapter.chapter)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate font-medium text-sm">{chapter.chapter}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {chapter.sectionCount} {chapter.sectionCount === 1 ? 'section' : 'sections'} · {chapter.billCount} {chapter.billCount === 1 ? 'bill' : 'bills'}
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0" />
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </CardContent>
+        </Card>
+
+        {/* Column 3: Sections */}
+        <Card className="flex w-56 flex-col">
+          <CardHeader className="flex-shrink-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              {selectedChapter ? 'Sections' : 'Select a Chapter'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-hidden p-0">
+            <ScrollArea className="h-full">
+              {!selectedChapter ? (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground p-4">
+                  Select a chapter to view sections
                 </div>
               ) : isLoadingSections ? (
                 <div className="space-y-2 p-4">
@@ -246,7 +337,7 @@ function StatutesPageContent() {
                 </div>
               ) : sections.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
-                  No sections found for this code.
+                  No sections found for this chapter.
                 </div>
               ) : (
                 <div className="space-y-1 p-2">
@@ -260,7 +351,6 @@ function StatutesPageContent() {
                       <div className="flex-1 min-w-0">
                         <div className="truncate font-medium text-sm">{section.section}</div>
                         <div className="text-xs text-muted-foreground">
-                          {section.chapter && `${section.chapter} · `}
                           {section.billCount} {section.billCount === 1 ? 'bill' : 'bills'}
                         </div>
                       </div>
@@ -273,7 +363,7 @@ function StatutesPageContent() {
           </CardContent>
         </Card>
 
-        {/* Column 3: Bills */}
+        {/* Column 4: Bills */}
         <Card className="flex flex-1 flex-col">
           <CardHeader className="flex-shrink-0 pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
@@ -360,8 +450,8 @@ function StatutesPageFallback() {
           Browse Texas codes and see which bills affect each section
         </p>
       </div>
-      <div className="flex min-h-0 flex-1 gap-4 px-6 pb-6">
-        <Card className="flex w-72 flex-col">
+      <div className="flex min-h-0 flex-1 gap-3 px-6 pb-6">
+        <Card className="flex w-56 flex-col">
           <CardHeader className="flex-shrink-0 pb-2">
             <CardTitle className="text-sm font-medium">Texas Codes</CardTitle>
           </CardHeader>
@@ -373,9 +463,17 @@ function StatutesPageFallback() {
             </div>
           </CardContent>
         </Card>
-        <Card className="flex w-80 flex-col">
+        <Card className="flex w-56 flex-col">
           <CardHeader className="flex-shrink-0 pb-2">
             <CardTitle className="text-sm font-medium">Select a Code</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 p-4">
+            <Skeleton className="h-32 w-full" />
+          </CardContent>
+        </Card>
+        <Card className="flex w-56 flex-col">
+          <CardHeader className="flex-shrink-0 pb-2">
+            <CardTitle className="text-sm font-medium">Select a Chapter</CardTitle>
           </CardHeader>
           <CardContent className="flex-1 p-4">
             <Skeleton className="h-32 w-full" />

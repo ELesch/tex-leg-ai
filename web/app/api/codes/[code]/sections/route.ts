@@ -8,15 +8,27 @@ interface RouteParams {
 }
 
 // GET /api/codes/[code]/sections - List sections for a Texas code with bill counts
+// Supports optional ?chapter= query parameter to filter by chapter
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     // Decode the code name (URLs encode spaces, etc.)
     const code = decodeURIComponent(params.code);
 
+    // Get optional chapter filter from query params
+    const { searchParams } = new URL(request.url);
+    const chapterFilter = searchParams.get('chapter');
+
+    // Build where clause
+    const whereClause: { code: string; chapter?: string | null } = { code };
+    if (chapterFilter) {
+      // Handle "Other" as null chapter
+      whereClause.chapter = chapterFilter === 'Other' ? null : chapterFilter;
+    }
+
     // Get sections grouped with bill counts
     const sectionStats = await prisma.billCodeReference.groupBy({
       by: ['section', 'chapter'],
-      where: { code },
+      where: whereClause,
       _count: {
         section: true,
       },
