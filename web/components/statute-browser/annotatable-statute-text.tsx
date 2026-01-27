@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatuteAnnotationPopover } from './statute-annotation-popover';
+import { OverlappingAnnotationsPopover } from './overlapping-annotations-popover';
 import { cn } from '@/lib/utils';
 import { getIndentLevel, decodeHtmlEntities } from '@/lib/utils/statute-text-formatter';
 import {
@@ -85,7 +86,7 @@ interface TextSegment {
   text: string;
   start: number;
   end: number;
-  annotation?: StatuteAnnotation;
+  annotations?: StatuteAnnotation[];  // Changed from single to array for overlaps
   searchMatch?: SearchMatch & { index: number };
 }
 
@@ -104,78 +105,68 @@ function filterRevisionHistory(content: string): string {
 
 /**
  * Build segments of text with annotations and search matches applied.
+ * Uses boundary-based splitting to properly handle overlapping annotations.
  */
 function buildTextSegments(
   content: string,
   annotations: StatuteAnnotation[],
   searchMatches: SearchMatch[] = []
 ): TextSegment[] {
-  // Combine all ranges (annotations take priority over search matches)
-  const ranges: { start: number; end: number; annotation?: StatuteAnnotation; searchMatch?: SearchMatch & { index: number } }[] = [];
+  // Collect all boundary points from annotations and search matches
+  const boundaries = new Set<number>();
+  boundaries.add(0);
+  boundaries.add(content.length);
 
-  // Add annotations
+  // Add annotation boundaries
   for (const annotation of annotations) {
-    ranges.push({
-      start: annotation.startOffset,
-      end: annotation.endOffset,
-      annotation,
-    });
+    if (annotation.startOffset >= 0 && annotation.startOffset <= content.length) {
+      boundaries.add(annotation.startOffset);
+    }
+    if (annotation.endOffset >= 0 && annotation.endOffset <= content.length) {
+      boundaries.add(annotation.endOffset);
+    }
   }
 
-  // Add search matches (only if they don't overlap with annotations)
-  searchMatches.forEach((match, index) => {
-    const overlapsAnnotation = annotations.some(
-      a => (match.startOffset >= a.startOffset && match.startOffset < a.endOffset) ||
-           (match.endOffset > a.startOffset && match.endOffset <= a.endOffset)
-    );
-    if (!overlapsAnnotation) {
-      ranges.push({
-        start: match.startOffset,
-        end: match.endOffset,
-        searchMatch: { ...match, index },
-      });
+  // Add search match boundaries (with index tracking)
+  const indexedMatches = searchMatches.map((match, index) => ({ ...match, index }));
+  for (const match of indexedMatches) {
+    if (match.startOffset >= 0 && match.startOffset <= content.length) {
+      boundaries.add(match.startOffset);
     }
-  });
+    if (match.endOffset >= 0 && match.endOffset <= content.length) {
+      boundaries.add(match.endOffset);
+    }
+  }
 
-  // Sort by start offset
-  ranges.sort((a, b) => a.start - b.start);
+  // Sort boundaries
+  const sortedBoundaries = Array.from(boundaries).sort((a, b) => a - b);
 
+  // Build segments between each pair of boundaries
   const segments: TextSegment[] = [];
-  let currentPosition = 0;
 
-  for (const range of ranges) {
-    // Skip if this range overlaps with a previous one
-    if (range.start < currentPosition) {
-      continue;
-    }
+  for (let i = 0; i < sortedBoundaries.length - 1; i++) {
+    const start = sortedBoundaries[i];
+    const end = sortedBoundaries[i + 1];
 
-    // Add non-highlighted text before this range
-    if (range.start > currentPosition) {
-      segments.push({
-        text: content.slice(currentPosition, range.start),
-        start: currentPosition,
-        end: range.start,
-      });
-    }
+    if (start >= end) continue;
 
-    // Add the highlighted text
+    // Find all annotations that cover this segment
+    const coveringAnnotations = annotations.filter(
+      ann => ann.startOffset <= start && ann.endOffset >= end
+    );
+
+    // Find search match that covers this segment (if any)
+    // Search matches don't show if there are annotations
+    const coveringMatch = coveringAnnotations.length === 0
+      ? indexedMatches.find(match => match.startOffset <= start && match.endOffset >= end)
+      : undefined;
+
     segments.push({
-      text: content.slice(range.start, range.end),
-      start: range.start,
-      end: range.end,
-      annotation: range.annotation,
-      searchMatch: range.searchMatch,
-    });
-
-    currentPosition = range.end;
-  }
-
-  // Add any remaining non-highlighted text
-  if (currentPosition < content.length) {
-    segments.push({
-      text: content.slice(currentPosition),
-      start: currentPosition,
-      end: content.length,
+      text: content.slice(start, end),
+      start,
+      end,
+      annotations: coveringAnnotations.length > 0 ? coveringAnnotations : undefined,
+      searchMatch: coveringMatch,
     });
   }
 
@@ -190,6 +181,14 @@ interface HighlightedTextProps {
   onMatchClick?: (matchIndex: number) => void;
 }
 
+// Visual styles for overlapping annotations
+const overlapColors = {
+  // 2 overlapping annotations - gradient effect
+  two: 'bg-gradient-to-r from-yellow-200/60 via-blue-200/60 to-yellow-200/60 dark:from-yellow-900/40 dark:via-blue-900/40 dark:to-yellow-900/40',
+  // 3+ overlapping annotations - distinctive purple ring
+  multiple: 'bg-purple-200/60 dark:bg-purple-900/40 ring-1 ring-purple-400/50 dark:ring-purple-500/50',
+};
+
 function HighlightedText({
   segment,
   onAnnotationClick,
@@ -200,7 +199,7 @@ function HighlightedText({
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
   // Plain text
-  if (!segment.annotation && !segment.searchMatch) {
+  if (!segment.annotations?.length && !segment.searchMatch) {
     return <>{segment.text}</>;
   }
 
@@ -220,34 +219,72 @@ function HighlightedText({
     );
   }
 
-  // Annotation
-  const annotation = segment.annotation!;
+  const annotations = segment.annotations!;
+
+  // Single annotation - use existing behavior
+  if (annotations.length === 1) {
+    const annotation = annotations[0];
+    return (
+      <StatuteAnnotationPopover
+        annotation={annotation}
+        open={isPopoverOpen}
+        onOpenChange={setIsPopoverOpen}
+        onEdit={() => {
+          setIsPopoverOpen(false);
+          onAnnotationEdit?.(annotation.id);
+        }}
+        onDelete={() => {
+          setIsPopoverOpen(false);
+          onAnnotationDelete?.(annotation.id);
+        }}
+      >
+        <span
+          data-annotation-id={annotation.id}
+          className={cn(
+            'cursor-pointer rounded-sm transition-colors',
+            highlightColors[annotation.type]
+          )}
+          onClick={() => onAnnotationClick?.(annotation.id)}
+        >
+          {segment.text}
+        </span>
+      </StatuteAnnotationPopover>
+    );
+  }
+
+  // Multiple overlapping annotations
+  const overlapStyle = annotations.length === 2 ? overlapColors.two : overlapColors.multiple;
 
   return (
-    <StatuteAnnotationPopover
-      annotation={annotation}
+    <OverlappingAnnotationsPopover
+      annotations={annotations}
       open={isPopoverOpen}
       onOpenChange={setIsPopoverOpen}
-      onEdit={() => {
+      onEdit={(annotationId) => {
         setIsPopoverOpen(false);
-        onAnnotationEdit?.(annotation.id);
+        onAnnotationEdit?.(annotationId);
       }}
-      onDelete={() => {
+      onDelete={(annotationId) => {
         setIsPopoverOpen(false);
-        onAnnotationDelete?.(annotation.id);
+        onAnnotationDelete?.(annotationId);
       }}
     >
       <span
-        data-annotation-id={annotation.id}
+        data-annotation-count={annotations.length}
+        data-annotation-ids={annotations.map(a => a.id).join(',')}
         className={cn(
-          'cursor-pointer rounded-sm transition-colors',
-          highlightColors[annotation.type]
+          'cursor-pointer rounded-sm transition-colors relative',
+          overlapStyle
         )}
-        onClick={() => onAnnotationClick?.(annotation.id)}
+        onClick={() => onAnnotationClick?.(annotations[0].id)}
       >
         {segment.text}
+        {/* Small badge indicating overlap count */}
+        <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-3.5 h-3.5 text-[10px] font-medium bg-purple-500 text-white rounded-full">
+          {annotations.length}
+        </span>
       </span>
-    </StatuteAnnotationPopover>
+    </OverlappingAnnotationsPopover>
   );
 }
 

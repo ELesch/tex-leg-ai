@@ -7,6 +7,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -75,65 +81,87 @@ export function StatuteAnnotationPopover({
     : null;
 
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent
-        className="w-80 p-0"
-        align="start"
-        sideOffset={8}
-        onOpenAutoFocus={(e) => e.preventDefault()}
-      >
-        <div className="p-3 space-y-3">
-          {/* Header with type badge and actions */}
-          <div className="flex items-start justify-between">
-            <Badge className={cn('gap-1', typeColors[annotation.type])} variant="secondary">
-              <Icon className="h-3 w-3" />
-              {typeLabels[annotation.type]}
-            </Badge>
-            <div className="flex gap-1">
-              {onEdit && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={onEdit}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  <span className="sr-only">Edit annotation</span>
-                </Button>
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <Popover open={open} onOpenChange={onOpenChange}>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>{children}</PopoverTrigger>
+          </TooltipTrigger>
+          {/* Hover preview tooltip */}
+          <TooltipContent
+            side="top"
+            className="max-w-xs p-2"
+            hidden={open} // Hide tooltip when popover is open
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <Badge className={cn('gap-1 text-xs', typeColors[annotation.type])} variant="secondary">
+                <Icon className="h-3 w-3" />
+                {typeLabels[annotation.type]}
+              </Badge>
+            </div>
+            <p className="text-xs line-clamp-2">{annotation.content || annotation.selectedText}</p>
+            <p className="text-xs text-muted-foreground mt-1">Click to view/edit</p>
+          </TooltipContent>
+          {/* Full popover on click */}
+          <PopoverContent
+            className="w-80 p-0"
+            align="start"
+            sideOffset={8}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <div className="p-3 space-y-3">
+              {/* Header with type badge and actions */}
+              <div className="flex items-start justify-between">
+                <Badge className={cn('gap-1', typeColors[annotation.type])} variant="secondary">
+                  <Icon className="h-3 w-3" />
+                  {typeLabels[annotation.type]}
+                </Badge>
+                <div className="flex gap-1">
+                  {onEdit && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={onEdit}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      <span className="sr-only">Edit annotation</span>
+                    </Button>
+                  )}
+                  {onDelete && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={onDelete}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span className="sr-only">Delete annotation</span>
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Selected text preview */}
+              <div className="text-xs bg-muted p-2 rounded italic line-clamp-2">
+                &ldquo;{annotation.selectedText.substring(0, 150)}
+                {annotation.selectedText.length > 150 ? '...' : ''}&rdquo;
+              </div>
+
+              {/* Annotation content */}
+              {annotation.content && (
+                <p className="text-sm leading-relaxed">{annotation.content}</p>
               )}
-              {onDelete && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-destructive hover:text-destructive"
-                  onClick={onDelete}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span className="sr-only">Delete annotation</span>
-                </Button>
+
+              {/* Creation date */}
+              {timeAgo && (
+                <p className="text-xs text-muted-foreground">Created {timeAgo}</p>
               )}
             </div>
-          </div>
-
-          {/* Selected text preview */}
-          <div className="text-xs bg-muted p-2 rounded italic line-clamp-2">
-            &ldquo;{annotation.selectedText.substring(0, 150)}
-            {annotation.selectedText.length > 150 ? '...' : ''}&rdquo;
-          </div>
-
-          {/* Annotation content */}
-          {annotation.content && (
-            <p className="text-sm leading-relaxed">{annotation.content}</p>
-          )}
-
-          {/* Creation date */}
-          {timeAgo && (
-            <p className="text-xs text-muted-foreground">Created {timeAgo}</p>
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
+          </PopoverContent>
+        </Popover>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 

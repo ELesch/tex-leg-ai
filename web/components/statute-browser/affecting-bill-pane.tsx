@@ -91,11 +91,14 @@ export function AffectingBillPane({
     }
   }, [codeAbbr, sectionNum, chapterNum]);
 
+  // Re-fetch when code, section, or chapter changes
+  // Note: fetchAffectingBills already depends on these via useCallback,
+  // but we include them explicitly to ensure re-fetch on any change
   useEffect(() => {
     if (codeAbbr) {
       fetchAffectingBills();
     }
-  }, [fetchAffectingBills, codeAbbr]);
+  }, [fetchAffectingBills, codeAbbr, sectionNum, chapterNum]);
 
   // Fetch bill detail when selected
   const fetchBillDetail = useCallback(async (billId: string) => {
