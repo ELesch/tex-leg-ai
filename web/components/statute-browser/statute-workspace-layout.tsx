@@ -331,7 +331,7 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
 
   return (
     <div className={cn('flex h-full', className)}>
-      <ResizablePanelGroup direction="horizontal">
+      <ResizablePanelGroup orientation="horizontal">
         {/* Left panel - Tree */}
         <ResizablePanel defaultSize={20} minSize={15} maxSize={35}>
           <StatuteTree
