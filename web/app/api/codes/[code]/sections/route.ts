@@ -19,10 +19,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const chapterFilter = searchParams.get('chapter');
 
     // Build where clause
-    const whereClause: { code: string; chapter?: string | null } = { code };
+    const whereClause: {
+      code: string;
+      chapter?: string;
+    } = { code };
     if (chapterFilter) {
-      // Handle "Other" as null chapter
-      whereClause.chapter = chapterFilter === 'Other' ? null : chapterFilter;
+      // Handle "Other" as empty string chapter
+      whereClause.chapter = chapterFilter === 'Other' ? '' : chapterFilter;
     }
 
     // Get sections grouped with bill counts
