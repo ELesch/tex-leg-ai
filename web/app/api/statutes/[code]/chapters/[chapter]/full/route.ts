@@ -99,6 +99,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         sectionNum: s.sectionNum,
         heading: s.heading,
         subchapter: s.subchapter,
+        subchapterTitle: s.subchapterTitle,
+        text: s.text,
         textLength: s.text.length,
       })),
     });

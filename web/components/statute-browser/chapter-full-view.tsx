@@ -5,14 +5,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, FileText, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface SectionSummary {
+interface SectionData {
   id: string;
   sectionNum: string;
   heading: string | null;
   subchapter: string | null;
+  subchapterTitle: string | null;
+  text: string;
   textLength: number;
 }
 
@@ -24,7 +26,7 @@ interface ChapterData {
   sectionCount: number;
   subchapters: string[];
   fullText: string;
-  sections: SectionSummary[];
+  sections: SectionData[];
 }
 
 interface ChapterFullViewProps {
@@ -50,6 +52,38 @@ function filterRevisionHistory(content: string): string {
     filtered = filtered.replace(pattern, '');
   }
   return filtered.replace(/\n{3,}/g, '\n\n');
+}
+
+// Determine indent level based on subsection markers
+function getIndentLevel(line: string): number {
+  const trimmed = line.trim();
+  if (/^\([a-z]\)/.test(trimmed)) return 1;        // (a), (b), (c)
+  if (/^\(\d+\)/.test(trimmed)) return 2;          // (1), (2), (3)
+  if (/^\([A-Z]\)/.test(trimmed)) return 3;        // (A), (B), (C)
+  if (/^\([ivxlcdm]+\)/i.test(trimmed)) return 4;  // (i), (ii), (iii)
+  return 0;
+}
+
+// Render text with indentation for subsection markers
+function renderIndentedText(text: string, hideRevisionHistory: boolean) {
+  const processedText = hideRevisionHistory ? filterRevisionHistory(text) : text;
+  const lines = processedText.split('\n');
+
+  return lines.map((line, i) => {
+    const indent = getIndentLevel(line);
+    return (
+      <div
+        key={i}
+        className={cn(
+          'leading-relaxed',
+          indent > 0 && `ml-${indent * 4}`
+        )}
+        style={{ marginLeft: indent > 0 ? `${indent * 1.5}rem` : undefined }}
+      >
+        {line || '\u00A0'}
+      </div>
+    );
+  });
 }
 
 export function ChapterFullView({
@@ -117,7 +151,7 @@ export function ChapterFullView({
     }
     acc[key].push(section);
     return acc;
-  }, {} as Record<string, SectionSummary[]>) || {};
+  }, {} as Record<string, SectionData[]>) || {};
 
   if (isLoading) {
     return (
@@ -161,10 +195,6 @@ export function ChapterFullView({
       </div>
     );
   }
-
-  const displayText = hideRevisionHistory
-    ? filterRevisionHistory(chapterData.fullText)
-    : chapterData.fullText;
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
@@ -222,7 +252,7 @@ export function ChapterFullView({
                       className="text-xs px-1.5 py-0.5 rounded bg-background hover:bg-accent border"
                       onClick={() => onSectionClick?.(section.sectionNum)}
                     >
-                      §{section.sectionNum}
+                      {section.sectionNum}
                     </button>
                   ))}
                 </div>
@@ -232,12 +262,51 @@ export function ChapterFullView({
         </div>
       </div>
 
-      {/* Full chapter text */}
+      {/* Structured chapter content with indentation */}
       <ScrollArea className="flex-1">
         <div className="p-4">
-          <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed">
-            {displayText}
-          </pre>
+          {/* Chapter header */}
+          <h2 className="text-lg font-bold mb-4">
+            CHAPTER {chapterData.chapter}. {chapterData.chapterTitle || ''}
+          </h2>
+
+          {/* Sections grouped by subchapter */}
+          {Object.entries(sectionsBySubchapter).map(([subchapter, sections]) => (
+            <div key={subchapter} className="mb-6">
+              {/* Subchapter header */}
+              {subchapter !== '__none__' && (
+                <div className="ml-4 mb-4">
+                  <h3 className="font-semibold text-base border-b pb-1 mb-3">
+                    SUBCHAPTER {subchapter}. {sections[0]?.subchapterTitle || ''}
+                  </h3>
+                </div>
+              )}
+
+              {/* Sections */}
+              {sections.map(section => (
+                <div
+                  key={section.id}
+                  className={cn(
+                    'mb-6',
+                    subchapter !== '__none__' ? 'ml-8' : 'ml-4'
+                  )}
+                >
+                  {/* Section header */}
+                  <button
+                    className="font-medium text-sm mb-2 hover:text-primary cursor-pointer text-left"
+                    onClick={() => onSectionClick?.(section.sectionNum)}
+                  >
+                    Sec. {section.sectionNum}. {section.heading || ''}
+                  </button>
+
+                  {/* Section text with indentation */}
+                  <div className="text-sm font-mono">
+                    {renderIndentedText(section.text, hideRevisionHistory)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       </ScrollArea>
     </div>
