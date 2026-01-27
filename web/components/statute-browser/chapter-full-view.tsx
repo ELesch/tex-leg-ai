@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BookOpen, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { renderIndentedText } from '@/lib/utils/statute-text-formatter';
 
 interface SectionData {
   id: string;
@@ -35,52 +36,6 @@ interface ChapterFullViewProps {
   hideRevisionHistory?: boolean;
   onSectionClick?: (sectionNum: string) => void;
   className?: string;
-}
-
-// Patterns for revision history that can be hidden
-const revisionPatterns = [
-  /Added by Acts \d{4}.*?(?=\n|$)/g,
-  /Amended by Acts \d{4}.*?(?=\n|$)/g,
-  /Redesignated from.*?(?=\n|$)/g,
-  /Renumbered from.*?(?=\n|$)/g,
-  /Text of.*?(?=\n|$)/g,
-];
-
-function filterRevisionHistory(content: string): string {
-  let filtered = content;
-  for (const pattern of revisionPatterns) {
-    filtered = filtered.replace(pattern, '');
-  }
-  return filtered.replace(/\n{3,}/g, '\n\n');
-}
-
-// Determine indent level based on subsection markers
-function getIndentLevel(line: string): number {
-  const trimmed = line.trim();
-  if (/^\([a-z]\)/.test(trimmed)) return 1;        // (a), (b), (c)
-  if (/^\(\d+\)/.test(trimmed)) return 2;          // (1), (2), (3)
-  if (/^\([A-Z]\)/.test(trimmed)) return 3;        // (A), (B), (C)
-  if (/^\([ivxlcdm]+\)/i.test(trimmed)) return 4;  // (i), (ii), (iii)
-  return 0;
-}
-
-// Render text with indentation for subsection markers
-function renderIndentedText(text: string, hideRevisionHistory: boolean) {
-  const processedText = hideRevisionHistory ? filterRevisionHistory(text) : text;
-  const lines = processedText.split('\n');
-
-  return lines.map((line, i) => {
-    const indent = getIndentLevel(line);
-    return (
-      <div
-        key={i}
-        className="leading-relaxed"
-        style={{ marginLeft: indent > 0 ? `${indent * 1.5}rem` : undefined }}
-      >
-        {line || '\u00A0'}
-      </div>
-    );
-  });
 }
 
 export function ChapterFullView({
@@ -298,7 +253,7 @@ export function ChapterFullView({
 
                   {/* Section text with indentation */}
                   <div className="text-sm font-mono">
-                    {renderIndentedText(section.text, hideRevisionHistory)}
+                    {renderIndentedText(section.text, { hideRevisionHistory })}
                   </div>
                 </div>
               ))}

@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileText, Scale, History, ExternalLink, ArrowRight } from 'lucide-react';
+import { renderIndentedText } from '@/lib/utils/statute-text-formatter';
 
 interface StatuteData {
   id: string;
@@ -229,8 +230,8 @@ export function StatuteViewer({ codeAbbr, sectionNum }: StatuteViewerProps) {
                   dangerouslySetInnerHTML={{ __html: statute.textHtml }}
                 />
               ) : (
-                <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                  {statute.text}
+                <div className="text-sm font-mono">
+                  {renderIndentedText(statute.text)}
                 </div>
               )}
             </div>
