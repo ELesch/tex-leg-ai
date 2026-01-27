@@ -74,10 +74,7 @@ function renderIndentedText(text: string, hideRevisionHistory: boolean) {
     return (
       <div
         key={i}
-        className={cn(
-          'leading-relaxed',
-          indent > 0 && `ml-${indent * 4}`
-        )}
+        className="leading-relaxed"
         style={{ marginLeft: indent > 0 ? `${indent * 1.5}rem` : undefined }}
       >
         {line || '\u00A0'}

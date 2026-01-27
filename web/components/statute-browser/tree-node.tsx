@@ -83,20 +83,29 @@ export function TreeNode({
   const hasChildren = node.hasChildren && !isSection;
   const canHaveMarker = node.type !== 'section'; // Markers only on code/chapter/subchapter
 
-  const handleClick = useCallback((e: React.MouseEvent) => {
+  // Handler for chevron/expand area only
+  const handleChevronClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isSection) {
-      onSelect();
-    } else if (hasChildren) {
+    if (hasChildren) {
       onToggle();
     }
-  }, [isSection, hasChildren, onSelect, onToggle]);
+  }, [hasChildren, onToggle]);
+
+  // Handler for label/content area
+  const handleLabelClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isSection || node.type === 'chapter') {
+      onSelect();  // Show content for sections AND chapters
+    } else if (hasChildren) {
+      onToggle();  // Just expand for codes (no viewable content)
+    }
+  }, [isSection, node.type, hasChildren, onSelect, onToggle]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      if (isSection) {
-        onSelect();
+      if (isSection || node.type === 'chapter') {
+        onSelect();  // Show content for sections AND chapters
       } else if (hasChildren) {
         onToggle();
       }
@@ -107,7 +116,7 @@ export function TreeNode({
       e.preventDefault();
       onToggle();
     }
-  }, [isSection, hasChildren, isExpanded, onSelect, onToggle]);
+  }, [isSection, node.type, hasChildren, isExpanded, onSelect, onToggle]);
 
   const Icon = isSection
     ? FileText
@@ -131,12 +140,14 @@ export function TreeNode({
           'transition-colors'
         )}
         style={{ paddingLeft: `${level * 16 + 8}px` }}
-        onClick={handleClick}
         onKeyDown={handleKeyDown}
       >
-        {/* Expand/collapse chevron */}
+        {/* Expand/collapse chevron - separate click target */}
         {hasChildren ? (
-          <span className="w-4 h-4 flex items-center justify-center shrink-0">
+          <span
+            className="w-4 h-4 flex items-center justify-center shrink-0 cursor-pointer hover:bg-accent/50 rounded"
+            onClick={handleChevronClick}
+          >
             {isLoading ? (
               <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
             ) : (
@@ -147,31 +158,37 @@ export function TreeNode({
           <span className="w-4" />
         )}
 
-        {/* Node icon */}
-        <Icon className={cn(
-          'h-4 w-4 shrink-0',
-          isSection ? 'text-blue-500' : 'text-amber-500'
-        )} />
+        {/* Label area - separate click target for showing content */}
+        <div
+          className="flex items-center gap-1 flex-1 min-w-0 cursor-pointer"
+          onClick={handleLabelClick}
+        >
+          {/* Node icon */}
+          <Icon className={cn(
+            'h-4 w-4 shrink-0',
+            isSection ? 'text-blue-500' : 'text-amber-500'
+          )} />
 
-        {/* Marker indicator */}
-        {marker && (
-          <span
-            className={cn(
-              'w-2.5 h-2.5 rounded-full shrink-0',
-              getMarkerColorClass(marker.color)
-            )}
-            title={marker.label || `${marker.color} marker`}
-          />
-        )}
-
-        {/* Node label */}
-        <div className="flex-1 min-w-0 truncate">
-          <span className="text-sm font-medium">{node.label}</span>
-          {node.sublabel && (
-            <span className="ml-1 text-xs text-muted-foreground truncate">
-              {node.sublabel}
-            </span>
+          {/* Marker indicator */}
+          {marker && (
+            <span
+              className={cn(
+                'w-2.5 h-2.5 rounded-full shrink-0',
+                getMarkerColorClass(marker.color)
+              )}
+              title={marker.label || `${marker.color} marker`}
+            />
           )}
+
+          {/* Node label */}
+          <div className="flex-1 min-w-0 truncate">
+            <span className="text-sm font-medium">{node.label}</span>
+            {node.sublabel && (
+              <span className="ml-1 text-xs text-muted-foreground truncate">
+                {node.sublabel}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Context menu for markers */}
