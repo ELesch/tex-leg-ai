@@ -330,22 +330,24 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
   ] : [];
 
   return (
-    <div className={cn('flex h-full', className)}>
+    <div className={cn('flex h-full w-full overflow-hidden', className)}>
       <ResizablePanelGroup orientation="horizontal">
         {/* Left panel - Tree */}
         <ResizablePanel defaultSize={20} minSize={15} maxSize={35}>
-          <StatuteTree
-            onSelectSection={handleSelectSection}
-            onSelectChapter={handleSelectChapter}
-            selectedSection={selectionKey}
-          />
+          <div className="h-full w-full overflow-hidden">
+            <StatuteTree
+              onSelectSection={handleSelectSection}
+              onSelectChapter={handleSelectChapter}
+              selectedSection={selectionKey}
+            />
+          </div>
         </ResizablePanel>
 
         <ResizableHandle withHandle />
 
         {/* Main panel - Content */}
-        <ResizablePanel defaultSize={isSidebarOpen ? 50 : 80}>
-          <div className="flex flex-col h-full">
+        <ResizablePanel defaultSize={50} minSize={30}>
+          <div className="flex flex-col h-full w-full overflow-hidden">
             {/* Empty state */}
             {!selectedCode && !selectedSection && !selectedChapter && (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
@@ -487,8 +489,8 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
         {isSidebarOpen && (
           <>
             <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={30} minSize={20} maxSize={40}>
-              <div className="flex flex-col h-full border-l">
+            <ResizablePanel defaultSize={30} minSize={15} maxSize={40}>
+              <div className="flex flex-col h-full w-full overflow-hidden border-l">
                 {/* Sidebar header */}
                 <div className="flex-shrink-0 p-2 border-b flex items-center justify-between">
                   <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as typeof sidebarTab)}>
