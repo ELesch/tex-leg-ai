@@ -75,6 +75,8 @@ function StatutesPageContent() {
   const selectedSection = searchParams.get('section');
 
   const [codeFilter, setCodeFilter] = useState('');
+  const [chapterFilter, setChapterFilter] = useState('');
+  const [sectionFilter, setSectionFilter] = useState('');
   const [codes, setCodes] = useState<CodeStats[]>([]);
   const [chapters, setChapters] = useState<ChapterStats[]>([]);
   const [sections, setSections] = useState<SectionStats[]>([]);
@@ -182,12 +184,23 @@ function StatutesPageContent() {
     code.code.toLowerCase().includes(codeFilter.toLowerCase())
   );
 
+  const filteredChapters = chapters.filter((chapter) =>
+    chapter.chapter.toLowerCase().includes(chapterFilter.toLowerCase())
+  );
+
+  const filteredSections = sections.filter((section) =>
+    section.section.toLowerCase().includes(sectionFilter.toLowerCase())
+  );
+
   const handleSelectCode = (code: string) => {
+    setChapterFilter('');
+    setSectionFilter('');
     router.push(`/statutes?code=${encodeURIComponent(code)}`);
   };
 
   const handleSelectChapter = (chapter: string) => {
     if (selectedCode) {
+      setSectionFilter('');
       router.push(
         `/statutes?code=${encodeURIComponent(selectedCode)}&chapter=${encodeURIComponent(chapter)}`
       );
@@ -275,6 +288,17 @@ function StatutesPageContent() {
             <CardTitle className="text-sm font-medium">
               {selectedCode ? 'Chapters' : 'Select a Code'}
             </CardTitle>
+            {selectedCode && (
+              <div className="relative mt-2">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Filter chapters..."
+                  value={chapterFilter}
+                  onChange={(e) => setChapterFilter(e.target.value)}
+                  className="h-9 pl-8"
+                />
+              </div>
+            )}
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0">
             <ScrollArea className="h-full">
@@ -288,13 +312,15 @@ function StatutesPageContent() {
                     <Skeleton key={i} className="h-10 w-full" />
                   ))}
                 </div>
-              ) : chapters.length === 0 ? (
+              ) : filteredChapters.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
-                  No chapters found for this code.
+                  {chapters.length === 0
+                    ? 'No chapters found for this code.'
+                    : 'No chapters match your filter.'}
                 </div>
               ) : (
                 <div className="space-y-1 p-2">
-                  {chapters.map((chapter) => (
+                  {filteredChapters.map((chapter) => (
                     <Button
                       key={chapter.chapter}
                       variant={selectedChapter === chapter.chapter ? 'secondary' : 'ghost'}
@@ -322,6 +348,17 @@ function StatutesPageContent() {
             <CardTitle className="text-sm font-medium">
               {selectedChapter ? 'Sections' : 'Select a Chapter'}
             </CardTitle>
+            {selectedChapter && (
+              <div className="relative mt-2">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Filter sections..."
+                  value={sectionFilter}
+                  onChange={(e) => setSectionFilter(e.target.value)}
+                  className="h-9 pl-8"
+                />
+              </div>
+            )}
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0">
             <ScrollArea className="h-full">
@@ -335,13 +372,15 @@ function StatutesPageContent() {
                     <Skeleton key={i} className="h-10 w-full" />
                   ))}
                 </div>
-              ) : sections.length === 0 ? (
+              ) : filteredSections.length === 0 ? (
                 <div className="p-4 text-center text-sm text-muted-foreground">
-                  No sections found for this chapter.
+                  {sections.length === 0
+                    ? 'No sections found for this chapter.'
+                    : 'No sections match your filter.'}
                 </div>
               ) : (
                 <div className="space-y-1 p-2">
-                  {sections.map((section) => (
+                  {filteredSections.map((section) => (
                     <Button
                       key={section.section}
                       variant={selectedSection === section.section ? 'secondary' : 'ghost'}
