@@ -193,6 +193,9 @@ model Bill {
   codeReferences          BillCodeReference[]
   terminologyReplacements TerminologyReplacement[]
 
+  // Statute versioning relation
+  statuteChanges          Statute[]
+
   @@unique([sessionId, billType, billNumber])
   @@index([sessionId])
   @@index([billType])
@@ -962,5 +965,90 @@ model BillNotification {
   @@index([userId])
   @@index([followedBillId])
   @@map("bill_notification")
+  @@schema("texlegai")
+}
+
+// ============================================
+// Texas Statutes Models
+// ============================================
+
+// Texas Code (e.g., Education Code, Government Code)
+model TexasCode {
+  id           String    @id @default(cuid())
+  abbreviation String    @unique  // "ED", "GV", "BC"
+  name         String    @unique  // "Education Code"
+  lastSyncedAt DateTime?
+  sectionCount Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  statutes     Statute[]
+
+  @@index([abbreviation])
+  @@map("texas_code")
+  @@schema("texlegai")
+}
+
+// Individual statute section with versioning
+model Statute {
+  id              String    @id @default(cuid())
+  codeId          String
+  code            TexasCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+
+  // Hierarchy
+  chapterNum      String    // "29"
+  chapterTitle    String?   // "Educational Programs"
+  subchapter      String?   // "A"
+  subchapterTitle String?   // "Special Education Program"
+  sectionNum      String    // "29.001"
+  heading         String?   // "DEFINITIONS"
+
+  // Content
+  text            String    @db.Text
+  textHtml        String?   @db.Text
+
+  // Versioning
+  version         Int       @default(1)
+  isCurrent       Boolean   @default(true)
+  effectiveDate   DateTime?
+  supersededAt    DateTime?
+
+  // Bill that created this version (null for initial load)
+  changedByBillId String?
+  changedByBill   Bill?     @relation(fields: [changedByBillId], references: [id])
+  changeType      CodeReferenceAction?  // ADD, AMEND, REPEAL
+
+  // Source
+  sourceUrl       String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([codeId, sectionNum, version])
+  @@index([codeId, isCurrent])
+  @@index([codeId, chapterNum, isCurrent])
+  @@index([isCurrent])
+  @@index([changedByBillId])
+  @@map("statute")
+  @@schema("texlegai")
+}
+
+// Sync job tracking for statutes (follows SyncJob pattern)
+model StatuteSyncJob {
+  id              String        @id @default(cuid())
+  status          SyncJobStatus @default(PENDING)
+  currentCode     String?
+  progressByCodes Json          @default("{}")
+  completedCodes  Json          @default("{}")
+  totalProcessed  Int           @default(0)
+  totalCreated    Int           @default(0)
+  totalErrors     Int           @default(0)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  lastError       String?       @db.Text
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("statute_sync_job")
   @@schema("texlegai")
 }
