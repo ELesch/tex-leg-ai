@@ -486,11 +486,9 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
         </ResizablePanel>
 
         {/* Right panel - Sidebar */}
-        {isSidebarOpen && (
-          <>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={30} minSize={10} maxSize={40}>
-              <div className="flex flex-col h-full w-full min-w-0 overflow-hidden border-l">
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={30} minSize={10} maxSize={40}>
+          <div className="flex flex-col h-full w-full min-w-0 overflow-hidden border-l">
                 {/* Sidebar header */}
                 <div className="flex-shrink-0 p-2 border-b flex items-center justify-between">
                   <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as typeof sidebarTab)}>
@@ -588,22 +586,8 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
                   )}
                 </div>
               </div>
-            </ResizablePanel>
-          </>
-        )}
+        </ResizablePanel>
       </ResizablePanelGroup>
-
-      {/* Sidebar toggle button when collapsed */}
-      {!isSidebarOpen && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="fixed right-4 top-20 z-10"
-          onClick={() => setIsSidebarOpen(true)}
-        >
-          <PanelRightOpen className="h-4 w-4" />
-        </Button>
-      )}
     </div>
   );
 }
