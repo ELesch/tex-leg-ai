@@ -18,14 +18,26 @@ export async function GET() {
       },
     });
 
+    // Check actual statute counts for each code (more accurate than cached sectionCount)
+    const statuteCounts = await prisma.statute.groupBy({
+      by: ['codeId'],
+      where: { isCurrent: true },
+      _count: { id: true },
+    });
+
+    const countMap = new Map(statuteCounts.map(s => [s.codeId, s._count.id]));
+
     return NextResponse.json({
-      codes: codes.map(code => ({
-        id: code.id,
-        abbreviation: code.abbreviation,
-        name: code.name,
-        sectionCount: code.sectionCount,
-        hasChildren: code.sectionCount > 0,
-      })),
+      codes: codes.map(code => {
+        const actualCount = countMap.get(code.id) || 0;
+        return {
+          id: code.id,
+          abbreviation: code.abbreviation,
+          name: code.name,
+          sectionCount: actualCount,
+          hasChildren: actualCount > 0,
+        };
+      }),
     });
   } catch (error) {
     console.error('Error fetching codes:', error);
