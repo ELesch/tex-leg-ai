@@ -33,6 +33,8 @@ import {
   Moon,
   Monitor,
   Users,
+  Scale,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
@@ -55,6 +57,8 @@ const mobileNavItems: MobileNavItem[] = [
   { name: 'Advanced Search', href: '/search', icon: Search },
   { name: 'Followed Bills', href: '/followed', icon: Bell, requiresAuth: true },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { name: 'Statutes', href: '/statutes', icon: Scale },
+  { name: 'Statute Browser', href: '/statute-browser', icon: BookOpen },
   { name: 'Teams', href: '/teams', icon: Users, requiresAuth: true, hideWhenNotAuth: true },
   { name: 'Help', href: '/help', icon: HelpCircle },
 ];

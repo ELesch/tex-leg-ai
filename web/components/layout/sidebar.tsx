@@ -35,6 +35,7 @@ import {
   Monitor,
   LogOut,
   Scale,
+  BookOpen,
 } from 'lucide-react';
 import { SyncStatusIndicator } from '@/components/admin/sync-status-indicator';
 
@@ -76,6 +77,11 @@ const navigation: NavItem[] = [
     name: 'Statutes',
     href: '/statutes',
     icon: Scale,
+  },
+  {
+    name: 'Statute Browser',
+    href: '/statute-browser',
+    icon: BookOpen,
   },
 ];
 
