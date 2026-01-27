@@ -267,7 +267,7 @@ export function StatuteNotesPanel({
               <p>No notes yet</p>
               {codeAbbr && (
                 <p className="text-xs mt-1">
-                  Click "Add" to create a note for this location
+                  Click &quot;Add&quot; to create a note for this location
                 </p>
               )}
             </div>

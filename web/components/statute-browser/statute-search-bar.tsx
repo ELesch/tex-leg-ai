@@ -205,7 +205,7 @@ export function StatuteSearchBar({
       {/* Search tips */}
       {!isSemanticMode && !query && (
         <div className="text-xs text-muted-foreground">
-          Tip: Use AND, OR, NOT operators (e.g., "education AND school NOT federal")
+          Tip: Use AND, OR, NOT operators (e.g., &quot;education AND school NOT federal&quot;)
         </div>
       )}
     </div>

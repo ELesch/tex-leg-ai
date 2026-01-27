@@ -72,7 +72,7 @@ export function StatuteSearchResults({
       <div className={cn('p-4 text-center', className)}>
         <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
         <p className="text-sm text-muted-foreground">
-          No results found for "{query}"
+          No results found for &quot;{query}&quot;
         </p>
       </div>
     );
