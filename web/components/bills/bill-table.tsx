@@ -17,6 +17,7 @@ interface BillTableProps {
   searchParams: {
     search?: string;
     billType?: string;
+    subject?: string;
     sortBy?: string;
     sortOrder?: string;
     page?: string;
@@ -34,6 +35,11 @@ export async function BillTable({ searchParams }: BillTableProps) {
   // Bill type filter
   if (searchParams.billType && searchParams.billType !== 'all') {
     where.billType = searchParams.billType as BillType;
+  }
+
+  // Subject filter
+  if (searchParams.subject) {
+    where.subjects = { has: searchParams.subject };
   }
 
   // Search filter

@@ -294,6 +294,35 @@ describe('XML Parser', () => {
 
         expect(result!.subjects).toEqual([]);
       });
+
+      it('decodes HTML entities in subjects', () => {
+        const xmlWithEntities = `<?xml version="1.0" encoding="UTF-8"?>
+<billhistory bill="89(R) HB 999" lastUpdate="3/20/2025">
+  <caption>Test bill.</caption>
+  <authors>Smith</authors>
+  <coauthors></coauthors>
+  <sponsors></sponsors>
+  <cosponsors></cosponsors>
+  <subjects>
+    <subject>Health &amp; Human Services (H0123)</subject>
+    <subject>Education--Primary &amp; Secondary (E0456)</subject>
+    <subject>Texas A&amp;M University System (T0789)</subject>
+  </subjects>
+  <lastaction>03/20/2025 H Filed</lastaction>
+  <committees></committees>
+  <actions></actions>
+  <billtext></billtext>
+</billhistory>`;
+
+        const result = parseBillXml(xmlWithEntities);
+
+        expect(result!.subjects).toHaveLength(3);
+        expect(result!.subjects).toContain('Health & Human Services');
+        expect(result!.subjects).toContain('Education--Primary & Secondary');
+        expect(result!.subjects).toContain('Texas A&M University System');
+        // Ensure no encoded entities remain
+        expect(result!.subjects.join('')).not.toContain('&amp;');
+      });
     });
 
     describe('action parsing', () => {

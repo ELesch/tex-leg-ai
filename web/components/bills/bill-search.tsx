@@ -11,7 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, X } from 'lucide-react';
+import { Search, X, Tag } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { useDebouncedCallback } from 'use-debounce';
 
 export function BillSearch() {
@@ -56,6 +57,12 @@ export function BillSearch() {
     setSearch('');
     updateSearchParams({ search: null });
   };
+
+  const clearSubject = () => {
+    updateSearchParams({ subject: null });
+  };
+
+  const currentSubject = searchParams.get('subject');
 
   return (
     <div className="space-y-4">
@@ -125,6 +132,25 @@ export function BillSearch() {
           </SelectContent>
         </Select>
       </div>
+
+      {/* Active subject filter */}
+      {currentSubject && (
+        <div className="flex items-center gap-2">
+          <Tag className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Filtering by subject:</span>
+          <Badge variant="secondary" className="gap-1 pr-1">
+            {currentSubject}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-4 w-4 rounded-full hover:bg-destructive/20"
+              onClick={clearSubject}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </Badge>
+        </div>
+      )}
 
       {/* Search hint */}
       <p className="text-xs text-muted-foreground">

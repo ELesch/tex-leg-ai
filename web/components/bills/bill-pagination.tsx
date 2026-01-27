@@ -7,6 +7,7 @@ interface BillPaginationProps {
   searchParams: {
     search?: string;
     billType?: string;
+    subject?: string;
     sortBy?: string;
     sortOrder?: string;
     page?: string;
@@ -22,6 +23,10 @@ export async function BillPagination({ searchParams }: BillPaginationProps) {
 
   if (searchParams.billType && searchParams.billType !== 'all') {
     where.billType = searchParams.billType as BillType;
+  }
+
+  if (searchParams.subject) {
+    where.subjects = { has: searchParams.subject };
   }
 
   if (searchParams.search) {

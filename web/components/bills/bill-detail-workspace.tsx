@@ -276,9 +276,17 @@ export function BillDetailWorkspace({ bill }: BillDetailWorkspaceProps) {
                   <p className="text-sm font-medium text-muted-foreground">Subjects</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {bill.subjects.map((subject, i) => (
-                      <Badge key={i} variant="secondary">
-                        {subject}
-                      </Badge>
+                      <Link
+                        key={i}
+                        href={`/bills?subject=${encodeURIComponent(subject)}`}
+                      >
+                        <Badge
+                          variant="secondary"
+                          className="cursor-pointer transition-colors hover:bg-secondary/80"
+                        >
+                          {subject}
+                        </Badge>
+                      </Link>
                     ))}
                   </div>
                 </div>

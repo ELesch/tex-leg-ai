@@ -60,6 +60,21 @@ export interface ParsedBill {
 }
 
 /**
+ * Decode HTML entities in a string
+ */
+export function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+/**
  * Extract text content from an XML element
  * Handles CDATA and HTML entities
  */
@@ -68,16 +83,7 @@ function extractText(xml: string, tagName: string): string {
   const match = xml.match(pattern);
   if (!match) return '';
 
-  const text = match[1]
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .trim();
-
-  return text;
+  return decodeHtmlEntities(match[1]).trim();
 }
 
 /**
@@ -108,7 +114,7 @@ function parseSubjects(xml: string): string[] {
   const pattern = /<subject>([^<]*)<\/subject>/gi;
   let match;
   while ((match = pattern.exec(xml)) !== null) {
-    const subject = match[1].trim();
+    const subject = decodeHtmlEntities(match[1]).trim();
     if (subject) {
       // Remove the code in parentheses, e.g., "State Finances--Appropriations (I0746)" -> "State Finances--Appropriations"
       const cleanSubject = subject.replace(/\s*\([^)]+\)\s*$/, '').trim();

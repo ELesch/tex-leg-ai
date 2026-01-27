@@ -62,3 +62,4 @@ prisma/migrations/**/migration_lock.toml
 # Cache
 .cache
 *.log
+.env*.local

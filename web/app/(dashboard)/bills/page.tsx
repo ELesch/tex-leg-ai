@@ -8,6 +8,7 @@ interface BillsPageProps {
   searchParams: {
     search?: string;
     billType?: string;
+    subject?: string;
     sortBy?: string;
     sortOrder?: string;
     page?: string;
