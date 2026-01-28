@@ -57,6 +57,7 @@ interface AnnotationPanelProps {
   canResolve: boolean;
   onAnnotationAdded: () => void;
   onAnnotationClick?: (annotation: Annotation) => void;
+  onScrollToAnnotation?: (annotationId: string) => void;
   selectedAnnotation?: Annotation | null;
   showCreateForm?: boolean;
   pendingSelection?: {
@@ -280,6 +281,7 @@ export function AnnotationPanel({
   canResolve,
   onAnnotationAdded,
   onAnnotationClick,
+  onScrollToAnnotation,
   selectedAnnotation,
   showCreateForm,
   pendingSelection,
@@ -430,7 +432,10 @@ export function AnnotationPanel({
                 currentUserId={currentUserId}
                 canResolve={canResolve}
                 onUpdated={onAnnotationAdded}
-                onClick={() => onAnnotationClick?.(annotation)}
+                onClick={() => {
+                  onAnnotationClick?.(annotation);
+                  onScrollToAnnotation?.(annotation.id);
+                }}
                 isSelected={selectedAnnotation?.id === annotation.id}
               />
             ))

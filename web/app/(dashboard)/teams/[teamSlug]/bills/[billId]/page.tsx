@@ -13,10 +13,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { CommentThread } from '@/components/teams/comment-thread';
 import { AnnotationPanel } from '@/components/teams/annotation-panel';
 import { TeamChatPanel } from '@/components/teams/team-chat-panel';
+import { AnnotatableBillText } from '@/components/teams/annotatable-bill-text';
 import { WorkspaceStatusSelect, WorkspacePrioritySelect } from '@/components/teams/workspace-status';
+import { WorkspaceSummary } from '@/components/teams/workspace-summary';
 import { useToast } from '@/hooks/use-toast';
 import {
-  ArrowLeft,
   FileText,
   MessageSquare,
   StickyNote,
@@ -26,6 +27,7 @@ import {
   User,
   PanelRightClose,
   PanelRightOpen,
+  ChevronRight,
 } from 'lucide-react';
 import { TeamRole, WorkspaceStatus, WorkspacePriority, AnnotationType } from '@prisma/client';
 
@@ -102,6 +104,7 @@ export default function TeamWorkspacePage() {
 
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [teamId, setTeamId] = useState<string | null>(null);
+  const [teamName, setTeamName] = useState<string | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<TeamRole | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -132,6 +135,7 @@ export default function TeamWorkspacePage() {
       }
 
       setTeamId(team.id);
+      setTeamName(team.name);
 
       const response = await fetch(`/api/teams/${team.id}/workspaces/${billId}`);
       if (!response.ok) {
@@ -226,38 +230,57 @@ export default function TeamWorkspacePage() {
     }
   };
 
-  // Handle text selection for annotations
-  const handleTextSelection = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) {
-      setPendingSelection(null);
-      setShowAnnotationForm(false);
-      return;
-    }
-
-    const selectedText = selection.toString().trim();
-    if (!selectedText || selectedText.length < 3) return;
-
-    // Get the range and calculate offsets relative to the bill content
-    const range = selection.getRangeAt(0);
-    const container = document.getElementById('bill-content');
-    if (!container || !container.contains(range.commonAncestorContainer)) return;
-
-    // Simple offset calculation (can be improved for complex HTML)
-    const preSelectionRange = document.createRange();
-    preSelectionRange.selectNodeContents(container);
-    preSelectionRange.setEnd(range.startContainer, range.startOffset);
-    const startOffset = preSelectionRange.toString().length;
-    const endOffset = startOffset + selectedText.length;
-
-    setPendingSelection({
-      startOffset,
-      endOffset,
-      selectedText,
-    });
+  // Handle text selection for annotations (from AnnotatableBillText)
+  const handleTextSelect = useCallback((selection: {
+    startOffset: number;
+    endOffset: number;
+    selectedText: string;
+  }) => {
+    setPendingSelection(selection);
     setShowAnnotationForm(true);
     setSelectedAnnotation(null);
-  };
+  }, []);
+
+  // Handle clicking on an annotation in the bill text
+  const handleAnnotationClick = useCallback((annotationId: string) => {
+    const annotation = workspace?.annotations.find((a) => a.id === annotationId);
+    if (annotation) {
+      setSelectedAnnotation(annotation);
+    }
+  }, [workspace?.annotations]);
+
+  // Scroll to annotation in bill text
+  const scrollToAnnotation = useCallback((annotationId: string) => {
+    const element = document.querySelector(`[data-annotation-id="${annotationId}"]`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Flash effect
+      element.classList.add('ring-2', 'ring-primary');
+      setTimeout(() => element.classList.remove('ring-2', 'ring-primary'), 1500);
+    }
+  }, []);
+
+  // Handle saving workspace summary
+  const handleSaveSummary = useCallback(async (summary: string) => {
+    if (!teamId) return;
+
+    const response = await fetch(`/api/teams/${teamId}/workspaces/${billId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ summary: summary || null }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || 'Failed to update summary');
+    }
+
+    setWorkspace((prev) => (prev ? { ...prev, summary: summary || null } : null));
+    toast({
+      title: 'Summary updated',
+      description: 'Workspace summary has been saved.',
+    });
+  }, [teamId, billId, toast]);
 
   // Permission helpers
   const canChangeStatus =
@@ -300,16 +323,21 @@ export default function TeamWorkspacePage() {
 
   return (
     <div className="container mx-auto py-6 px-4">
+      {/* Breadcrumb navigation */}
+      <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
+        <Link href="/teams" className="hover:text-foreground transition-colors">
+          Teams
+        </Link>
+        <ChevronRight className="h-4 w-4" />
+        <Link href={`/teams/${teamSlug}`} className="hover:text-foreground transition-colors">
+          {teamName || teamSlug}
+        </Link>
+        <ChevronRight className="h-4 w-4" />
+        <span className="text-foreground font-medium">{workspace.bill.billId}</span>
+      </nav>
+
       {/* Header */}
       <div className="mb-6">
-        <Link
-          href={`/teams/${teamSlug}`}
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Team
-        </Link>
-
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
@@ -372,6 +400,13 @@ export default function TeamWorkspacePage() {
         </div>
       </div>
 
+      {/* Summary section */}
+      <WorkspaceSummary
+        summary={workspace.summary}
+        canEdit={canAnnotate}
+        onSave={handleSaveSummary}
+      />
+
       {/* Main content */}
       <div className={`grid gap-6 ${showRightPanel ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
         {/* Bill content - Left side */}
@@ -404,15 +439,16 @@ export default function TeamWorkspacePage() {
             </CardHeader>
             <CardContent className="flex-1 overflow-hidden">
               <ScrollArea className="h-full">
-                <div
-                  id="bill-content"
-                  className="prose prose-sm dark:prose-invert max-w-none select-text cursor-text"
-                  onMouseUp={canAnnotate ? handleTextSelection : undefined}
-                >
+                <div className="prose prose-sm dark:prose-invert max-w-none select-text cursor-text pr-4">
                   {workspace.bill.content ? (
-                    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                      {workspace.bill.content}
-                    </pre>
+                    <AnnotatableBillText
+                      content={workspace.bill.content}
+                      annotations={workspace.annotations}
+                      canAnnotate={canAnnotate}
+                      onTextSelect={handleTextSelect}
+                      onAnnotationClick={handleAnnotationClick}
+                      selectedAnnotationId={selectedAnnotation?.id}
+                    />
                   ) : (
                     <p className="text-muted-foreground text-center py-8">
                       Full bill text not available
@@ -433,15 +469,15 @@ export default function TeamWorkspacePage() {
                   <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="annotations" className="text-xs">
                       <StickyNote className="h-3 w-3 mr-1" />
-                      Notes
+                      Annotations
                     </TabsTrigger>
                     <TabsTrigger value="comments" className="text-xs">
                       <MessageSquare className="h-3 w-3 mr-1" />
-                      Chat
+                      Discussion
                     </TabsTrigger>
                     <TabsTrigger value="ai" className="text-xs">
                       <Bot className="h-3 w-3 mr-1" />
-                      AI
+                      AI Assistant
                     </TabsTrigger>
                   </TabsList>
                 </CardHeader>
@@ -457,6 +493,7 @@ export default function TeamWorkspacePage() {
                       canResolve={canResolve}
                       onAnnotationAdded={fetchWorkspace}
                       onAnnotationClick={setSelectedAnnotation}
+                      onScrollToAnnotation={scrollToAnnotation}
                       selectedAnnotation={selectedAnnotation}
                       showCreateForm={showAnnotationForm}
                       pendingSelection={pendingSelection}
