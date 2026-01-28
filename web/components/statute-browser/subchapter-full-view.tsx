@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BookOpen, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { renderIndentedText } from '@/lib/utils/statute-text-formatter';
+import { AnnotatableStatuteText, StatuteAnnotation } from './annotatable-statute-text';
 
 interface SectionData {
   id: string;
@@ -45,9 +46,13 @@ export function SubchapterFullView({
   onSectionClick,
   className,
 }: SubchapterFullViewProps) {
+  const { data: session } = useSession();
   const [subchapterData, setSubchapterData] = useState<SubchapterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Annotations state - keyed by section ID
+  const [annotationsBySectionId, setAnnotationsBySectionId] = useState<Record<string, StatuteAnnotation[]>>({});
 
   // Fetch subchapter data
   const fetchSubchapter = useCallback(async () => {
@@ -75,6 +80,95 @@ export function SubchapterFullView({
   useEffect(() => {
     fetchSubchapter();
   }, [fetchSubchapter]);
+
+  // Fetch annotations for all sections in the subchapter
+  useEffect(() => {
+    if (!session?.user || !subchapterData?.sections) {
+      setAnnotationsBySectionId({});
+      return;
+    }
+
+    async function fetchAllAnnotations() {
+      const annotationsMap: Record<string, StatuteAnnotation[]> = {};
+
+      await Promise.all(
+        subchapterData!.sections.map(async (section) => {
+          try {
+            const response = await fetch(
+              `/api/statutes/${encodeURIComponent(codeAbbr)}/sections/${encodeURIComponent(section.sectionNum)}/annotations`
+            );
+            if (response.ok) {
+              const data = await response.json();
+              annotationsMap[section.id] = data.annotations || [];
+            }
+          } catch (error) {
+            console.error(`Error fetching annotations for section ${section.sectionNum}:`, error);
+          }
+        })
+      );
+
+      setAnnotationsBySectionId(annotationsMap);
+    }
+
+    fetchAllAnnotations();
+  }, [session?.user, subchapterData, codeAbbr]);
+
+  // Handle annotation creation for a section
+  const handleAnnotationCreate = useCallback(async (
+    sectionNum: string,
+    sectionId: string,
+    annotation: { startOffset: number; endOffset: number; selectedText: string }
+  ) => {
+    if (!session?.user) return;
+
+    const content = window.prompt('Enter your annotation:');
+    if (!content) return;
+
+    try {
+      const response = await fetch(
+        `/api/statutes/${encodeURIComponent(codeAbbr)}/sections/${encodeURIComponent(sectionNum)}/annotations`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...annotation,
+            content,
+            type: 'NOTE',
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setAnnotationsBySectionId(prev => ({
+          ...prev,
+          [sectionId]: [...(prev[sectionId] || []), data.annotation],
+        }));
+      }
+    } catch (error) {
+      console.error('Error creating annotation:', error);
+    }
+  }, [session?.user, codeAbbr]);
+
+  // Handle annotation deletion
+  const handleAnnotationDelete = useCallback(async (sectionId: string, annotationId: string) => {
+    if (!session?.user) return;
+
+    try {
+      const response = await fetch(`/api/statutes/annotations/${annotationId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setAnnotationsBySectionId(prev => ({
+          ...prev,
+          [sectionId]: (prev[sectionId] || []).filter(a => a.id !== annotationId),
+        }));
+      }
+    } catch (error) {
+      console.error('Error deleting annotation:', error);
+    }
+  }, [session?.user]);
 
   if (isLoading) {
     return (
@@ -185,9 +279,18 @@ export function SubchapterFullView({
                 Sec. {section.sectionNum}. {section.heading || ''}
               </button>
 
-              {/* Section text with indentation */}
-              <div className="text-sm font-mono">
-                {renderIndentedText(section.text, { hideRevisionHistory })}
+              {/* Section text with annotations support */}
+              <div className="text-sm">
+                <AnnotatableStatuteText
+                  content={section.text}
+                  statuteId={section.id}
+                  annotations={annotationsBySectionId[section.id] || []}
+                  hideRevisionHistory={hideRevisionHistory}
+                  onAnnotationCreate={session?.user ? (annotation) =>
+                    handleAnnotationCreate(section.sectionNum, section.id, annotation) : undefined}
+                  onAnnotationDelete={session?.user ? (annotationId) =>
+                    handleAnnotationDelete(section.id, annotationId) : undefined}
+                />
               </div>
             </div>
           ))}

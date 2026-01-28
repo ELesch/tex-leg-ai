@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSession } from 'next-auth/react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BookOpen, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { renderIndentedText } from '@/lib/utils/statute-text-formatter';
+import { AnnotatableStatuteText, StatuteAnnotation } from './annotatable-statute-text';
 
 interface SectionData {
   id: string;
@@ -35,6 +36,7 @@ interface ChapterFullViewProps {
   chapterNum: string;
   hideRevisionHistory?: boolean;
   onSectionClick?: (sectionNum: string) => void;
+  onSubchapterClick?: (subchapter: string) => void;
   className?: string;
 }
 
@@ -43,12 +45,21 @@ export function ChapterFullView({
   chapterNum,
   hideRevisionHistory = false,
   onSectionClick,
+  onSubchapterClick,
   className,
 }: ChapterFullViewProps) {
+  const { data: session } = useSession();
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [chapterData, setChapterData] = useState<ChapterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedSubchapters, setExpandedSubchapters] = useState<Set<string>>(new Set());
+
+  // Annotations state - keyed by section ID
+  const [annotationsBySectionId, setAnnotationsBySectionId] = useState<Record<string, StatuteAnnotation[]>>({});
+
+  // Highlighted subchapter state for scroll-to effect
+  const [highlightedSubchapter, setHighlightedSubchapter] = useState<string | null>(null);
 
   // Fetch chapter data
   const fetchChapter = useCallback(async () => {
@@ -82,6 +93,39 @@ export function ChapterFullView({
     fetchChapter();
   }, [fetchChapter]);
 
+  // Fetch annotations for all sections in the chapter
+  useEffect(() => {
+    if (!session?.user || !chapterData?.sections) {
+      setAnnotationsBySectionId({});
+      return;
+    }
+
+    async function fetchAllAnnotations() {
+      const annotationsMap: Record<string, StatuteAnnotation[]> = {};
+
+      // Fetch annotations for each section
+      await Promise.all(
+        chapterData!.sections.map(async (section) => {
+          try {
+            const response = await fetch(
+              `/api/statutes/${encodeURIComponent(codeAbbr)}/sections/${encodeURIComponent(section.sectionNum)}/annotations`
+            );
+            if (response.ok) {
+              const data = await response.json();
+              annotationsMap[section.id] = data.annotations || [];
+            }
+          } catch (error) {
+            console.error(`Error fetching annotations for section ${section.sectionNum}:`, error);
+          }
+        })
+      );
+
+      setAnnotationsBySectionId(annotationsMap);
+    }
+
+    fetchAllAnnotations();
+  }, [session?.user, chapterData, codeAbbr]);
+
   // Toggle subchapter expansion
   const toggleSubchapter = (subchapter: string) => {
     setExpandedSubchapters(prev => {
@@ -94,6 +138,75 @@ export function ChapterFullView({
       return next;
     });
   };
+
+  // Scroll to subchapter with highlighting
+  const scrollToSubchapter = useCallback((subchapter: string) => {
+    const element = document.getElementById(`subchapter-${subchapter}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setHighlightedSubchapter(subchapter);
+      // Clear highlight after animation
+      setTimeout(() => setHighlightedSubchapter(null), 2000);
+      onSubchapterClick?.(subchapter);
+    }
+  }, [onSubchapterClick]);
+
+  // Handle annotation creation for a section
+  const handleAnnotationCreate = useCallback(async (
+    sectionNum: string,
+    sectionId: string,
+    annotation: { startOffset: number; endOffset: number; selectedText: string }
+  ) => {
+    if (!session?.user) return;
+
+    const content = window.prompt('Enter your annotation:');
+    if (!content) return;
+
+    try {
+      const response = await fetch(
+        `/api/statutes/${encodeURIComponent(codeAbbr)}/sections/${encodeURIComponent(sectionNum)}/annotations`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...annotation,
+            content,
+            type: 'NOTE',
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setAnnotationsBySectionId(prev => ({
+          ...prev,
+          [sectionId]: [...(prev[sectionId] || []), data.annotation],
+        }));
+      }
+    } catch (error) {
+      console.error('Error creating annotation:', error);
+    }
+  }, [session?.user, codeAbbr]);
+
+  // Handle annotation deletion
+  const handleAnnotationDelete = useCallback(async (sectionId: string, annotationId: string) => {
+    if (!session?.user) return;
+
+    try {
+      const response = await fetch(`/api/statutes/annotations/${annotationId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setAnnotationsBySectionId(prev => ({
+          ...prev,
+          [sectionId]: (prev[sectionId] || []).filter(a => a.id !== annotationId),
+        }));
+      }
+    } catch (error) {
+      console.error('Error deleting annotation:', error);
+    }
+  }, [session?.user]);
 
   // Group sections by subchapter
   const sectionsBySubchapter = chapterData?.sections.reduce((acc, section) => {
@@ -178,23 +291,30 @@ export function ChapterFullView({
       {/* Table of contents */}
       <div className="flex-shrink-0 p-3 border-b bg-muted/30">
         <div className="text-xs font-medium text-muted-foreground mb-2">
-          Jump to section
+          Jump to subchapter or section
         </div>
         <div className="max-h-32 overflow-auto">
           {Object.entries(sectionsBySubchapter).map(([subchapter, sections]) => (
             <div key={subchapter} className="mb-1">
               {subchapter !== '__none__' && (
-                <button
-                  className="flex items-center gap-1 text-xs font-medium hover:text-foreground text-muted-foreground w-full"
-                  onClick={() => toggleSubchapter(subchapter)}
-                >
-                  {expandedSubchapters.has(subchapter) ? (
-                    <ChevronDown className="h-3 w-3" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3" />
-                  )}
-                  Subchapter {subchapter}
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    className="flex items-center text-xs hover:text-foreground text-muted-foreground"
+                    onClick={() => toggleSubchapter(subchapter)}
+                  >
+                    {expandedSubchapters.has(subchapter) ? (
+                      <ChevronDown className="h-3 w-3" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3" />
+                    )}
+                  </button>
+                  <button
+                    className="text-xs font-medium hover:text-primary text-muted-foreground"
+                    onClick={() => scrollToSubchapter(subchapter)}
+                  >
+                    Subchapter {subchapter}
+                  </button>
+                </div>
               )}
               {(subchapter === '__none__' || expandedSubchapters.has(subchapter)) && (
                 <div className={cn('flex flex-wrap gap-1', subchapter !== '__none__' && 'ml-4 mt-1')}>
@@ -215,7 +335,7 @@ export function ChapterFullView({
       </div>
 
       {/* Structured chapter content with indentation */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1" ref={scrollAreaRef}>
         <div className="p-4">
           {/* Chapter header */}
           <h2 className="text-lg font-bold mb-4">
@@ -224,7 +344,15 @@ export function ChapterFullView({
 
           {/* Sections grouped by subchapter */}
           {Object.entries(sectionsBySubchapter).map(([subchapter, sections]) => (
-            <div key={subchapter} className="mb-6">
+            <div
+              key={subchapter}
+              id={subchapter !== '__none__' ? `subchapter-${subchapter}` : undefined}
+              className={cn(
+                'mb-6 transition-colors duration-1000 rounded-lg',
+                subchapter !== '__none__' && highlightedSubchapter === subchapter && 'bg-primary/10 ring-2 ring-primary/30',
+                subchapter !== '__none__' && '-mx-2 px-2 py-1'
+              )}
+            >
               {/* Subchapter header */}
               {subchapter !== '__none__' && (
                 <div className="ml-4 mb-4">
@@ -251,9 +379,18 @@ export function ChapterFullView({
                     Sec. {section.sectionNum}. {section.heading || ''}
                   </button>
 
-                  {/* Section text with indentation */}
-                  <div className="text-sm font-mono">
-                    {renderIndentedText(section.text, { hideRevisionHistory })}
+                  {/* Section text with annotations support */}
+                  <div className="text-sm">
+                    <AnnotatableStatuteText
+                      content={section.text}
+                      statuteId={section.id}
+                      annotations={annotationsBySectionId[section.id] || []}
+                      hideRevisionHistory={hideRevisionHistory}
+                      onAnnotationCreate={session?.user ? (annotation) =>
+                        handleAnnotationCreate(section.sectionNum, section.id, annotation) : undefined}
+                      onAnnotationDelete={session?.user ? (annotationId) =>
+                        handleAnnotationDelete(section.id, annotationId) : undefined}
+                    />
                   </div>
                 </div>
               ))}

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
-import { StickyNote, Trash2, Edit2, Plus, Loader2, ChevronRight, X } from 'lucide-react';
+import { StickyNote, Trash2, Edit2, Plus, Loader2, ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -14,7 +14,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { formatDistanceToNow } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface Note {
   id: string;
@@ -26,10 +32,13 @@ interface Note {
   updatedAt: string;
 }
 
+type ViewMode = 'section' | 'chapter' | 'subchapter';
+
 interface StatuteNotesPanelProps {
   codeAbbr?: string;
   chapterNum?: string | null;
   subchapter?: string | null;
+  viewMode?: ViewMode;
   onNavigateToNote?: (codeAbbr: string, chapterNum?: string, subchapter?: string) => void;
 }
 
@@ -37,6 +46,7 @@ export function StatuteNotesPanel({
   codeAbbr,
   chapterNum,
   subchapter,
+  viewMode = 'section',
   onNavigateToNote,
 }: StatuteNotesPanelProps) {
   const { data: session } = useSession();
@@ -46,8 +56,12 @@ export function StatuteNotesPanel({
   const [isCreating, setIsCreating] = useState(false);
   const [noteContent, setNoteContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  // When viewing a subchapter, chapter notes are collapsed by default
+  const [chapterNotesExpanded, setChapterNotesExpanded] = useState(viewMode !== 'subchapter');
+  // Creating note for specific scope
+  const [createScope, setCreateScope] = useState<'chapter' | 'subchapter'>('chapter');
 
-  // Fetch notes
+  // Fetch notes - always fetch for the chapter level to get all notes
   const fetchNotes = useCallback(async () => {
     if (!session?.user) {
       setNotes([]);
@@ -59,7 +73,7 @@ export function StatuteNotesPanel({
       const params = new URLSearchParams();
       if (codeAbbr) params.set('codeAbbr', codeAbbr);
       if (chapterNum) params.set('chapterNum', chapterNum);
-      if (subchapter) params.set('subchapter', subchapter);
+      // Don't filter by subchapter in the query - we'll group in the UI
 
       const response = await fetch(`/api/statutes/notes?${params.toString()}`);
       if (response.ok) {
@@ -71,11 +85,38 @@ export function StatuteNotesPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [session?.user, codeAbbr, chapterNum, subchapter]);
+  }, [session?.user, codeAbbr, chapterNum]);
 
   useEffect(() => {
     fetchNotes();
   }, [fetchNotes]);
+
+  // Update collapsed state when viewMode changes
+  useEffect(() => {
+    setChapterNotesExpanded(viewMode !== 'subchapter');
+  }, [viewMode]);
+
+  // Group notes by scope
+  const { chapterNotes, subchapterNotes, otherSubchapterNotes } = useMemo(() => {
+    const chapter: Note[] = [];
+    const current: Note[] = [];
+    const other: Note[] = [];
+
+    for (const note of notes) {
+      if (!note.subchapter) {
+        // Chapter-level note
+        chapter.push(note);
+      } else if (subchapter && note.subchapter === subchapter) {
+        // Current subchapter note
+        current.push(note);
+      } else {
+        // Other subchapter note
+        other.push(note);
+      }
+    }
+
+    return { chapterNotes: chapter, subchapterNotes: current, otherSubchapterNotes: other };
+  }, [notes, subchapter]);
 
   // Create a note
   const handleCreate = async () => {
@@ -89,7 +130,7 @@ export function StatuteNotesPanel({
         body: JSON.stringify({
           codeAbbr,
           chapterNum: chapterNum || null,
-          subchapter: subchapter || null,
+          subchapter: createScope === 'subchapter' ? subchapter : null,
           content: noteContent.trim(),
         }),
       });
@@ -197,6 +238,55 @@ export function StatuteNotesPanel({
     );
   }
 
+  // Render a single note card
+  const renderNoteCard = (note: Note) => (
+    <div
+      key={note.id}
+      className="p-3 rounded-md border bg-card hover:bg-accent/30 group"
+    >
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <button
+          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+          onClick={() => onNavigateToNote?.(
+            note.codeAbbr,
+            note.chapterNum || undefined,
+            note.subchapter || undefined
+          )}
+        >
+          {getNoteLocation(note)}
+          <ChevronRight className="h-3 w-3" />
+        </button>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => openEditDialog(note)}
+          >
+            <Edit2 className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-destructive hover:text-destructive"
+            onClick={() => handleDelete(note)}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+      <p className="text-sm whitespace-pre-wrap line-clamp-4">
+        {note.content}
+      </p>
+      <div className="mt-2 text-xs text-muted-foreground">
+        {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}
+      </div>
+    </div>
+  );
+
+  const hasSubchapter = viewMode === 'subchapter' && subchapter;
+  const totalNotes = notes.length;
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-shrink-0 p-3 border-b">
@@ -217,6 +307,8 @@ export function StatuteNotesPanel({
               onClick={() => {
                 setIsCreating(true);
                 setNoteContent('');
+                // Default to subchapter scope when viewing a subchapter
+                setCreateScope(hasSubchapter ? 'subchapter' : 'chapter');
               }}
             >
               <Plus className="h-4 w-4 mr-1" />
@@ -229,6 +321,27 @@ export function StatuteNotesPanel({
       {/* Create note inline */}
       {isCreating && (
         <div className="flex-shrink-0 p-3 border-b bg-muted/30">
+          {/* Scope selector when viewing a subchapter */}
+          {hasSubchapter && (
+            <div className="flex gap-2 mb-2">
+              <Button
+                size="sm"
+                variant={createScope === 'subchapter' ? 'default' : 'outline'}
+                onClick={() => setCreateScope('subchapter')}
+                className="text-xs"
+              >
+                Subchapter {subchapter}
+              </Button>
+              <Button
+                size="sm"
+                variant={createScope === 'chapter' ? 'default' : 'outline'}
+                onClick={() => setCreateScope('chapter')}
+                className="text-xs"
+              >
+                Chapter {chapterNum}
+              </Button>
+            </div>
+          )}
           <Textarea
             placeholder="Write your note..."
             value={noteContent}
@@ -261,7 +374,7 @@ export function StatuteNotesPanel({
 
       <ScrollArea className="flex-1">
         <div className="p-2">
-          {notes.length === 0 ? (
+          {totalNotes === 0 ? (
             <div className="p-4 text-center text-sm text-muted-foreground">
               <StickyNote className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
               <p>No notes yet</p>
@@ -271,52 +384,73 @@ export function StatuteNotesPanel({
                 </p>
               )}
             </div>
-          ) : (
-            <div className="space-y-2">
-              {notes.map(note => (
-                <div
-                  key={note.id}
-                  className="p-3 rounded-md border bg-card hover:bg-accent/30 group"
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <button
-                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                      onClick={() => onNavigateToNote?.(
-                        note.codeAbbr,
-                        note.chapterNum || undefined,
-                        note.subchapter || undefined
-                      )}
-                    >
-                      {getNoteLocation(note)}
-                      <ChevronRight className="h-3 w-3" />
-                    </button>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => openEditDialog(note)}
-                      >
-                        <Edit2 className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(note)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
+          ) : hasSubchapter ? (
+            // Grouped view when viewing a subchapter
+            <div className="space-y-4">
+              {/* Current subchapter notes - always visible */}
+              {subchapterNotes.length > 0 && (
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground mb-2 px-1">
+                    Subchapter {subchapter} ({subchapterNotes.length})
                   </div>
-                  <p className="text-sm whitespace-pre-wrap line-clamp-4">
-                    {note.content}
-                  </p>
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}
+                  <div className="space-y-2">
+                    {subchapterNotes.map(renderNoteCard)}
                   </div>
                 </div>
-              ))}
+              )}
+
+              {/* Chapter notes - collapsible */}
+              {chapterNotes.length > 0 && (
+                <Collapsible open={chapterNotesExpanded} onOpenChange={setChapterNotesExpanded}>
+                  <CollapsibleTrigger asChild>
+                    <button className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground w-full px-1 py-1">
+                      {chapterNotesExpanded ? (
+                        <ChevronDown className="h-3 w-3" />
+                      ) : (
+                        <ChevronRight className="h-3 w-3" />
+                      )}
+                      Chapter {chapterNum} notes ({chapterNotes.length})
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="space-y-2 mt-2">
+                      {chapterNotes.map(renderNoteCard)}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+
+              {/* Other subchapter notes - collapsible */}
+              {otherSubchapterNotes.length > 0 && (
+                <Collapsible>
+                  <CollapsibleTrigger asChild>
+                    <button className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground w-full px-1 py-1">
+                      <ChevronRight className="h-3 w-3" />
+                      Other subchapters ({otherSubchapterNotes.length})
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="space-y-2 mt-2">
+                      {otherSubchapterNotes.map(renderNoteCard)}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+
+              {/* Show empty state for current subchapter if no notes there */}
+              {subchapterNotes.length === 0 && (
+                <div className="p-4 text-center text-sm text-muted-foreground border rounded-md">
+                  <p>No notes for Subchapter {subchapter}</p>
+                  <p className="text-xs mt-1">
+                    Click &quot;Add&quot; to create one
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            // Simple list view for chapter/section view
+            <div className="space-y-2">
+              {notes.map(renderNoteCard)}
             </div>
           )}
         </div>

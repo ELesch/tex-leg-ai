@@ -25,6 +25,10 @@ import {
   ExternalLink,
   History,
   MessageSquare,
+  ChevronDown,
+  ChevronRight,
+  Calendar,
+  FilePenLine,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -60,6 +64,14 @@ interface StatuteData {
   version: number;
   effectiveDate: string | null;
   sourceUrl: string | null;
+  changeType: string | null;
+  changedByBill: {
+    id: string;
+    billId: string;
+    description: string | null;
+    status: string | null;
+    lastActionDate: string | null;
+  } | null;
 }
 
 interface CodeData {
@@ -106,6 +118,7 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [sidebarTab, setSidebarTab] = useState<'search' | 'markers' | 'notes' | 'bills' | 'chat'>('search');
   const [hideRevisionHistory, setHideRevisionHistory] = useState(false);
+  const [showMetadata, setShowMetadata] = useState(false); // Hidden by default
 
   // Scroll state for scrollbar markers
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -548,6 +561,60 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
                       )}
                     </div>
                   </div>
+
+                  {/* Metadata section - collapsible */}
+                  {(statute.effectiveDate || statute.changeType || statute.changedByBill) && (
+                    <div className="mt-3 pt-3 border-t">
+                      <button
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowMetadata(!showMetadata)}
+                      >
+                        {showMetadata ? (
+                          <ChevronDown className="h-3 w-3" />
+                        ) : (
+                          <ChevronRight className="h-3 w-3" />
+                        )}
+                        Metadata
+                      </button>
+                      {showMetadata && (
+                        <div className="mt-2 space-y-2 text-sm">
+                          {statute.effectiveDate && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <Calendar className="h-3.5 w-3.5" />
+                              <span>
+                                Effective: {new Date(statute.effectiveDate).toLocaleDateString()}
+                              </span>
+                            </div>
+                          )}
+                          {statute.changeType && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <FilePenLine className="h-3.5 w-3.5" />
+                              <span>
+                                Change type: {statute.changeType.charAt(0) + statute.changeType.slice(1).toLowerCase()}
+                              </span>
+                            </div>
+                          )}
+                          {statute.changedByBill && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <FileText className="h-3.5 w-3.5" />
+                              <Link
+                                href={`/bills/${statute.changedByBill.billId}`}
+                                className="hover:text-foreground hover:underline"
+                              >
+                                Changed by: {statute.changedByBill.billId}
+                                {statute.changedByBill.description && (
+                                  <span className="text-xs ml-1">
+                                    - {statute.changedByBill.description.substring(0, 50)}
+                                    {statute.changedByBill.description.length > 50 && '...'}
+                                  </span>
+                                )}
+                              </Link>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Content with scrollbar markers */}
@@ -704,11 +771,24 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
                   {sidebarTab === 'notes' && (
                     <StatuteNotesPanel
                       codeAbbr={selectedCode || undefined}
-                      chapterNum={viewMode === 'chapter' ? selectedChapter : statute?.chapterNum}
-                      subchapter={statute?.subchapter}
-                      onNavigateToNote={(codeAbbr, chapterNum) => {
+                      chapterNum={
+                        viewMode === 'chapter' || viewMode === 'subchapter'
+                          ? selectedChapter
+                          : statute?.chapterNum
+                      }
+                      subchapter={
+                        viewMode === 'subchapter'
+                          ? selectedSubchapter
+                          : statute?.subchapter
+                      }
+                      viewMode={viewMode}
+                      onNavigateToNote={(codeAbbr, chapterNum, subchapter) => {
                         setSelectedCode(codeAbbr);
-                        if (chapterNum) {
+                        if (subchapter && chapterNum) {
+                          setSelectedChapter(chapterNum);
+                          setSelectedSubchapter(subchapter);
+                          setViewMode('subchapter');
+                        } else if (chapterNum) {
                           setSelectedChapter(chapterNum);
                           setViewMode('chapter');
                         }

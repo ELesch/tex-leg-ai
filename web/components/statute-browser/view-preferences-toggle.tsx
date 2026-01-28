@@ -88,7 +88,7 @@ export function ViewPreferencesToggle({
               ) : (
                 <Eye className="h-4 w-4 text-muted-foreground" />
               )}
-              Hide metadata
+              Hide revision history
             </Label>
           </div>
         </TooltipTrigger>
