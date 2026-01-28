@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Search, BookOpen } from 'lucide-react';
 import { TreeNode, TreeNodeData, NodeType, MarkerData, MarkerColor } from './tree-node';
 import { useSession } from 'next-auth/react';
+import { numericCompare, subchapterCompare, sectionNumCompare } from '@/lib/utils/numeric-sort';
 
 interface CodeData {
   id: string;
@@ -215,8 +216,11 @@ export function StatuteTree({ onSelectSection, onSelectChapter, onSelectSubchapt
       const children: TreeNodeData[] = [];
 
       if (type === 'code') {
-        // Fetched chapters
-        for (const ch of data.chapters as ChapterData[]) {
+        // Fetched chapters - sort numerically
+        const chapters = (data.chapters as ChapterData[])
+          .slice()
+          .sort((a, b) => numericCompare(a.chapterNum, b.chapterNum));
+        for (const ch of chapters) {
           children.push({
             id: getNodeKey('chapter', codeAbbr, ch.chapterNum),
             type: 'chapter',
@@ -227,8 +231,11 @@ export function StatuteTree({ onSelectSection, onSelectChapter, onSelectSubchapt
           });
         }
       } else if (type === 'chapter') {
-        // Fetched subchapters and sections
-        for (const sc of (data.subchapters as SubchapterData[]) || []) {
+        // Fetched subchapters - sort alphabetically/numerically
+        const subchapters = ((data.subchapters as SubchapterData[]) || [])
+          .slice()
+          .sort((a, b) => subchapterCompare(a.subchapter || '', b.subchapter || ''));
+        for (const sc of subchapters) {
           if (sc.subchapter) {
             children.push({
               id: getNodeKey('subchapter', codeAbbr, chapterNum!, sc.subchapter),
@@ -240,7 +247,11 @@ export function StatuteTree({ onSelectSection, onSelectChapter, onSelectSubchapt
             });
           }
         }
-        for (const s of (data.sections as SectionData[]) || []) {
+        // Fetched sections - sort numerically by section number
+        const sections = ((data.sections as SectionData[]) || [])
+          .slice()
+          .sort((a, b) => sectionNumCompare(a.sectionNum, b.sectionNum));
+        for (const s of sections) {
           children.push({
             id: getNodeKey('section', codeAbbr, s.sectionNum),
             type: 'section',
@@ -252,8 +263,11 @@ export function StatuteTree({ onSelectSection, onSelectChapter, onSelectSubchapt
           });
         }
       } else if (type === 'subchapter') {
-        // Fetched sections for subchapter
-        for (const s of (data.sections as SectionData[]) || []) {
+        // Fetched sections for subchapter - sort numerically
+        const sections = ((data.sections as SectionData[]) || [])
+          .slice()
+          .sort((a, b) => sectionNumCompare(a.sectionNum, b.sectionNum));
+        for (const s of sections) {
           children.push({
             id: getNodeKey('section', codeAbbr, s.sectionNum),
             type: 'section',

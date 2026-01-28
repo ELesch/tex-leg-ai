@@ -24,6 +24,7 @@ import {
   Scale,
   ExternalLink,
   History,
+  MessageSquare,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -37,6 +38,7 @@ import { AnnotatableStatuteText, StatuteAnnotation, SearchMatch } from './annota
 import { ViewPreferencesToggle } from './view-preferences-toggle';
 import { ChapterFullView } from './chapter-full-view';
 import { SubchapterFullView } from './subchapter-full-view';
+import { StatuteChatPanel } from './statute-chat-panel';
 import {
   StatuteScrollbarMarkers,
   ScrollbarMarker,
@@ -102,7 +104,7 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
   // UI state
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
-  const [sidebarTab, setSidebarTab] = useState<'search' | 'markers' | 'notes' | 'bills'>('search');
+  const [sidebarTab, setSidebarTab] = useState<'search' | 'markers' | 'notes' | 'bills' | 'chat'>('search');
   const [hideRevisionHistory, setHideRevisionHistory] = useState(false);
 
   // Scroll state for scrollbar markers
@@ -589,6 +591,9 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
                       <TabsTrigger value="bills" className="h-7 px-2">
                         <FileText className="h-4 w-4" />
                       </TabsTrigger>
+                      <TabsTrigger value="chat" className="h-7 px-2">
+                        <MessageSquare className="h-4 w-4" />
+                      </TabsTrigger>
                     </TabsList>
                   </Tabs>
                   <Button
@@ -665,6 +670,23 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
                         sectionNum={selectedSection || undefined}
                         chapterNum={selectedChapter || statute?.chapterNum}
                       />
+                    </div>
+                  )}
+
+                  {sidebarTab === 'chat' && selectedCode && (viewMode === 'chapter' || viewMode === 'subchapter') && (
+                    <StatuteChatPanel
+                      codeAbbr={selectedCode}
+                      chapterNum={selectedChapter || ''}
+                      subchapter={viewMode === 'subchapter' ? selectedSubchapter : null}
+                      className="h-full"
+                    />
+                  )}
+
+                  {sidebarTab === 'chat' && (!selectedCode || (viewMode !== 'chapter' && viewMode !== 'subchapter')) && (
+                    <div className="flex flex-col items-center justify-center h-full p-4 text-center text-muted-foreground">
+                      <MessageSquare className="h-12 w-12 mb-4 opacity-50" />
+                      <p className="text-sm">Select a chapter or subchapter to chat</p>
+                      <p className="text-xs mt-1">Click on a chapter name in the tree</p>
                     </div>
                   )}
                 </div>
