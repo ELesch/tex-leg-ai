@@ -667,8 +667,13 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
                     <div className="p-3">
                       <AffectingBillPane
                         codeAbbr={selectedCode}
-                        sectionNum={selectedSection || undefined}
-                        chapterNum={selectedChapter || statute?.chapterNum}
+                        sectionNum={viewMode === 'section' ? selectedSection || undefined : undefined}
+                        chapterNum={
+                          viewMode === 'chapter' || viewMode === 'subchapter'
+                            ? selectedChapter || undefined
+                            : statute?.chapterNum
+                        }
+                        subchapter={viewMode === 'subchapter' ? selectedSubchapter || undefined : undefined}
                       />
                     </div>
                   )}

@@ -50,6 +50,9 @@ export function StatuteChatPanel({
   const { data: session } = useSession();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Track previous context to detect changes
+  const prevContextRef = useRef({ codeAbbr, chapterNum, subchapter });
+
   // Sessions state
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
@@ -107,14 +110,26 @@ export function StatuteChatPanel({
     }
   }, [session?.user, codeAbbr, chapterNum, subchapter]);
 
-  // Fetch sessions on mount and when context changes
+  // Handle context changes - reset state FIRST, then fetch
   useEffect(() => {
+    const prevContext = prevContextRef.current;
+    const contextChanged =
+      prevContext.codeAbbr !== codeAbbr ||
+      prevContext.chapterNum !== chapterNum ||
+      prevContext.subchapter !== subchapter;
+
+    if (contextChanged) {
+      // Reset state immediately when context changes
+      setCurrentSessionId(null);
+      setMessages([]);
+      setSelectedBillId(null);
+      setSelectedBill(null);
+      setSessions([]);
+      prevContextRef.current = { codeAbbr, chapterNum, subchapter };
+    }
+
+    // Then fetch sessions for the new context
     fetchSessions();
-    // Reset state when context changes
-    setCurrentSessionId(null);
-    setMessages([]);
-    setSelectedBillId(null);
-    setSelectedBill(null);
   }, [fetchSessions, codeAbbr, chapterNum, subchapter, setMessages]);
 
   // Load session messages
@@ -246,6 +261,7 @@ export function StatuteChatPanel({
         <StatuteBillSelector
           codeAbbr={codeAbbr}
           chapterNum={chapterNum}
+          subchapter={subchapter}
           selectedBillId={selectedBillId}
           onBillSelect={handleBillSelect}
         />

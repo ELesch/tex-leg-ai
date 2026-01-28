@@ -15,47 +15,54 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const codeAbbr = searchParams.get('codeAbbr');
     const chapterNum = searchParams.get('chapterNum');
+    const subchapter = searchParams.get('subchapter');
 
     if (!codeAbbr || !chapterNum) {
       return NextResponse.json({ error: 'Code and chapter required' }, { status: 400 });
     }
 
-    // Map code abbreviation to full code name pattern
-    const codeNamePatterns: Record<string, string> = {
-      'ED': 'Education Code',
-      'GV': 'Government Code',
-      'BC': 'Business and Commerce Code',
-      'CP': 'Civil Practice and Remedies Code',
-      'CR': 'Code of Criminal Procedure',
-      'EL': 'Election Code',
-      'FA': 'Family Code',
-      'FI': 'Finance Code',
-      'HS': 'Health and Safety Code',
-      'HR': 'Human Resources Code',
-      'IN': 'Insurance Code',
-      'LA': 'Labor Code',
-      'LG': 'Local Government Code',
-      'NR': 'Natural Resources Code',
-      'OC': 'Occupations Code',
-      'PE': 'Penal Code',
-      'PW': 'Parks and Wildlife Code',
-      'PR': 'Property Code',
-      'TX': 'Tax Code',
-      'TN': 'Transportation Code',
-      'UT': 'Utilities Code',
-      'WA': 'Water Code',
-    };
-
-    const codeName = codeNamePatterns[codeAbbr] || codeAbbr;
-
-    // Find bills with code references to this chapter
-    const codeReferences = await prisma.billCodeReference.findMany({
+    // Look up code by abbreviation to get full name
+    const codeRecord = await prisma.texasCode.findFirst({
       where: {
         OR: [
-          { code: { contains: codeName } },
-          { code: { contains: codeAbbr } },
+          { abbreviation: codeAbbr.toUpperCase() },
+          { name: { contains: codeAbbr, mode: 'insensitive' } },
         ],
-        chapter: { contains: chapterNum },
+      },
+    });
+
+    // Build code name variations to search for
+    const codeVariations: string[] = [codeAbbr, codeAbbr.toUpperCase()];
+    if (codeRecord) {
+      if (codeRecord.name) codeVariations.push(codeRecord.name);
+      if (codeRecord.abbreviation) codeVariations.push(codeRecord.abbreviation);
+    }
+
+    // Build chapter variations
+    const chapterVariations = [
+      chapterNum,
+      `Chapter ${chapterNum}`,
+      `Ch. ${chapterNum}`,
+    ];
+
+    // Build subchapter variations if provided
+    const subchapterVariations: string[] = [];
+    if (subchapter) {
+      subchapterVariations.push(subchapter);
+      subchapterVariations.push(`Subchapter ${subchapter}`);
+      subchapterVariations.push(`Subch. ${subchapter}`);
+    }
+
+    // Find bills with code references to this chapter/subchapter
+    const codeReferences = await prisma.billCodeReference.findMany({
+      where: {
+        code: { in: codeVariations, mode: 'insensitive' },
+        OR: chapterVariations.map(ch => ({
+          chapter: { contains: ch, mode: 'insensitive' },
+        })),
+        ...(subchapterVariations.length > 0 && {
+          subchapter: { in: subchapterVariations, mode: 'insensitive' },
+        }),
       },
       include: {
         bill: {
@@ -68,11 +75,10 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      distinct: ['billId'],
-      take: 50,
+      take: 100,
     });
 
-    // Deduplicate and format bills
+    // Deduplicate by bill id
     const billsMap = new Map<string, {
       id: string;
       billId: string;

@@ -44,6 +44,7 @@ interface AffectingBillPaneProps {
   codeAbbr: string;
   sectionNum?: string;
   chapterNum?: string;
+  subchapter?: string;
   className?: string;
 }
 
@@ -57,6 +58,7 @@ export function AffectingBillPane({
   codeAbbr,
   sectionNum,
   chapterNum,
+  subchapter,
   className,
 }: AffectingBillPaneProps) {
   const [affectingBills, setAffectingBills] = useState<AffectingBill[]>([]);
@@ -78,6 +80,7 @@ export function AffectingBillPane({
       const params = new URLSearchParams({ code: codeAbbr });
       if (sectionNum) params.set('section', sectionNum);
       if (chapterNum) params.set('chapter', chapterNum);
+      if (subchapter) params.set('subchapter', subchapter);
 
       const response = await fetch(`/api/bills/code-references?${params.toString()}`);
       if (response.ok) {
@@ -89,16 +92,14 @@ export function AffectingBillPane({
     } finally {
       setIsLoadingBills(false);
     }
-  }, [codeAbbr, sectionNum, chapterNum]);
+  }, [codeAbbr, sectionNum, chapterNum, subchapter]);
 
-  // Re-fetch when code, section, or chapter changes
-  // Note: fetchAffectingBills already depends on these via useCallback,
-  // but we include them explicitly to ensure re-fetch on any change
+  // Re-fetch when code, section, chapter, or subchapter changes
   useEffect(() => {
     if (codeAbbr) {
       fetchAffectingBills();
     }
-  }, [fetchAffectingBills, codeAbbr, sectionNum, chapterNum]);
+  }, [fetchAffectingBills, codeAbbr, sectionNum, chapterNum, subchapter]);
 
   // Fetch bill detail when selected
   const fetchBillDetail = useCallback(async (billId: string) => {

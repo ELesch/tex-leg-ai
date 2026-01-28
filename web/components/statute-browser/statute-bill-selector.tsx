@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -24,6 +24,7 @@ interface AffectingBill {
 interface StatuteBillSelectorProps {
   codeAbbr: string;
   chapterNum: string;
+  subchapter?: string | null;
   selectedBillId: string | null;
   onBillSelect: (billId: string | null, bill: AffectingBill | null) => void;
   className?: string;
@@ -38,6 +39,7 @@ const actionColors: Record<string, string> = {
 export function StatuteBillSelector({
   codeAbbr,
   chapterNum,
+  subchapter,
   selectedBillId,
   onBillSelect,
   className,
@@ -45,13 +47,20 @@ export function StatuteBillSelector({
   const [bills, setBills] = useState<AffectingBill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Track previous context to detect changes
+  const prevContextRef = useRef({ codeAbbr, chapterNum, subchapter });
+
   const fetchBills = useCallback(async () => {
     setIsLoading(true);
+    setBills([]);
     try {
       const params = new URLSearchParams({
         codeAbbr,
         chapterNum,
       });
+      if (subchapter) {
+        params.set('subchapter', subchapter);
+      }
       const response = await fetch(`/api/statute-chat/affecting-bills?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
@@ -62,11 +71,24 @@ export function StatuteBillSelector({
     } finally {
       setIsLoading(false);
     }
-  }, [codeAbbr, chapterNum]);
+  }, [codeAbbr, chapterNum, subchapter]);
 
+  // Reset selection and refetch when context changes
   useEffect(() => {
+    const prevContext = prevContextRef.current;
+    const contextChanged =
+      prevContext.codeAbbr !== codeAbbr ||
+      prevContext.chapterNum !== chapterNum ||
+      prevContext.subchapter !== subchapter;
+
+    if (contextChanged) {
+      // Reset selection when context changes
+      onBillSelect(null, null);
+      prevContextRef.current = { codeAbbr, chapterNum, subchapter };
+    }
+
     fetchBills();
-  }, [fetchBills]);
+  }, [codeAbbr, chapterNum, subchapter, fetchBills, onBillSelect]);
 
   const handleValueChange = useCallback((value: string) => {
     if (value === '__none__') {
@@ -84,7 +106,7 @@ export function StatuteBillSelector({
   if (bills.length === 0) {
     return (
       <div className={cn('text-sm text-muted-foreground', className)}>
-        No bills affect this chapter
+        No bills affect this {subchapter ? 'subchapter' : 'chapter'}
       </div>
     );
   }

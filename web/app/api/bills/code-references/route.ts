@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 
-// GET /api/bills/code-references?code=ED&section=29.001&chapter=29
+// GET /api/bills/code-references?code=ED&section=29.001&chapter=29&subchapter=A
 // Returns bills that reference/affect the given statute
 export async function GET(request: NextRequest) {
   try {
@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const codeParam = searchParams.get('code');
     const section = searchParams.get('section');
     const chapter = searchParams.get('chapter');
+    const subchapter = searchParams.get('subchapter');
 
     if (!codeParam) {
       return NextResponse.json(
@@ -55,6 +56,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Build subchapter variations
+    const subchapterVariations: string[] = [];
+    if (subchapter) {
+      subchapterVariations.push(subchapter);
+      subchapterVariations.push(`Subchapter ${subchapter}`);
+      subchapterVariations.push(`Subch. ${subchapter}`);
+    }
+
     // Query BillCodeReference with code name variations
     const references = await prisma.billCodeReference.findMany({
       where: {
@@ -68,6 +77,9 @@ export async function GET(request: NextRequest) {
             { chapter: `Chapter ${chapter}` },
             { chapter: { startsWith: chapter } },
           ],
+        }),
+        ...(subchapterVariations.length > 0 && {
+          subchapter: { in: subchapterVariations, mode: 'insensitive' },
         }),
       },
       include: {
