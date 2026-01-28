@@ -6,9 +6,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AnnotatableStatuteText, StatuteAnnotation } from './annotatable-statute-text';
+import {
+  StatuteScrollbarMarkers,
+  ScrollbarMarker,
+} from './statute-scrollbar-markers';
 
 interface SectionData {
   id: string;
@@ -35,8 +39,11 @@ interface ChapterFullViewProps {
   codeAbbr: string;
   chapterNum: string;
   hideRevisionHistory?: boolean;
+  focusedSubchapter?: string | null;
   onSectionClick?: (sectionNum: string) => void;
   onSubchapterClick?: (subchapter: string) => void;
+  onSubchapterFocus?: (subchapter: string) => void;
+  onClearFocus?: () => void;
   className?: string;
 }
 
@@ -44,8 +51,11 @@ export function ChapterFullView({
   codeAbbr,
   chapterNum,
   hideRevisionHistory = false,
+  focusedSubchapter,
   onSectionClick,
   onSubchapterClick,
+  onSubchapterFocus,
+  onClearFocus,
   className,
 }: ChapterFullViewProps) {
   const { data: session } = useSession();
@@ -60,6 +70,9 @@ export function ChapterFullView({
 
   // Highlighted subchapter state for scroll-to effect
   const [highlightedSubchapter, setHighlightedSubchapter] = useState<string | null>(null);
+
+  // Scroll state for scrollbar markers
+  const [scrollState, setScrollState] = useState({ top: 0, height: 0, viewportHeight: 0 });
 
   // Fetch chapter data
   const fetchChapter = useCallback(async () => {
@@ -139,17 +152,19 @@ export function ChapterFullView({
     });
   };
 
-  // Scroll to subchapter with highlighting
+  // Scroll to subchapter with persistent focus
   const scrollToSubchapter = useCallback((subchapter: string) => {
     const element = document.getElementById(`subchapter-${subchapter}`);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Trigger persistent focus for context binding
+      onSubchapterFocus?.(subchapter);
+      // Also trigger temporary highlight animation
       setHighlightedSubchapter(subchapter);
-      // Clear highlight after animation
       setTimeout(() => setHighlightedSubchapter(null), 2000);
       onSubchapterClick?.(subchapter);
     }
-  }, [onSubchapterClick]);
+  }, [onSubchapterClick, onSubchapterFocus]);
 
   // Handle annotation creation for a section
   const handleAnnotationCreate = useCallback(async (
@@ -217,6 +232,43 @@ export function ChapterFullView({
     acc[key].push(section);
     return acc;
   }, {} as Record<string, SectionData[]>) || {};
+
+  // Calculate scrollbar markers from annotations across all sections
+  const scrollbarMarkers: ScrollbarMarker[] = (() => {
+    if (!chapterData?.sections) return [];
+
+    // Calculate total text length and section offsets
+    let totalLength = 0;
+    const sectionOffsets: { id: string; offset: number; length: number }[] = [];
+
+    for (const section of chapterData.sections) {
+      sectionOffsets.push({
+        id: section.id,
+        offset: totalLength,
+        length: section.text.length,
+      });
+      totalLength += section.text.length;
+    }
+
+    if (totalLength === 0) return [];
+
+    // Calculate annotation markers with adjusted positions
+    const markers: ScrollbarMarker[] = [];
+    for (const { id, offset } of sectionOffsets) {
+      const sectionAnnotations = annotationsBySectionId[id] || [];
+      for (const annotation of sectionAnnotations) {
+        // Map annotation position within section to overall position
+        const overallPosition = (offset + annotation.startOffset) / totalLength;
+        markers.push({
+          position: overallPosition,
+          type: 'annotation',
+          id: annotation.id,
+        });
+      }
+    }
+
+    return markers;
+  })();
 
   if (isLoading) {
     return (
@@ -288,6 +340,30 @@ export function ChapterFullView({
         </div>
       </div>
 
+      {/* Focused subchapter breadcrumb */}
+      {focusedSubchapter && (
+        <div className="flex-shrink-0 px-4 py-2 border-b bg-primary/5 flex items-center gap-2 text-sm">
+          <button
+            onClick={onClearFocus}
+            className="text-primary hover:underline font-medium"
+          >
+            Chapter {chapterData.chapter}
+          </button>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <span className="text-foreground font-medium">
+            Subchapter {focusedSubchapter}
+          </span>
+          <button
+            onClick={onClearFocus}
+            className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            title="Press Esc to return to full chapter"
+          >
+            <X className="h-3 w-3" />
+            <span>Clear focus</span>
+          </button>
+        </div>
+      )}
+
       {/* Table of contents */}
       <div className="flex-shrink-0 p-3 border-b bg-muted/30">
         <div className="text-xs font-medium text-muted-foreground mb-2">
@@ -335,69 +411,97 @@ export function ChapterFullView({
       </div>
 
       {/* Structured chapter content with indentation */}
-      <ScrollArea className="flex-1" ref={scrollAreaRef}>
-        <div className="p-4">
-          {/* Chapter header */}
-          <h2 className="text-lg font-bold mb-4">
-            CHAPTER {chapterData.chapter}. {chapterData.chapterTitle || ''}
-          </h2>
+      <div className="flex-1 relative min-h-0 overflow-hidden">
+        <ScrollArea
+          className="h-full"
+          ref={scrollAreaRef}
+          onScrollCapture={(e) => {
+            const target = e.target as HTMLElement;
+            setScrollState({
+              top: target.scrollTop,
+              height: target.scrollHeight,
+              viewportHeight: target.clientHeight,
+            });
+          }}
+        >
+          <div className="p-4 pr-6">
+            {/* Chapter header */}
+            <h2 className="text-lg font-bold mb-4">
+              CHAPTER {chapterData.chapter}. {chapterData.chapterTitle || ''}
+            </h2>
 
-          {/* Sections grouped by subchapter */}
-          {Object.entries(sectionsBySubchapter).map(([subchapter, sections]) => (
-            <div
-              key={subchapter}
-              id={subchapter !== '__none__' ? `subchapter-${subchapter}` : undefined}
-              className={cn(
-                'mb-6 transition-colors duration-1000 rounded-lg',
-                subchapter !== '__none__' && highlightedSubchapter === subchapter && 'bg-primary/10 ring-2 ring-primary/30',
-                subchapter !== '__none__' && '-mx-2 px-2 py-1'
-              )}
-            >
-              {/* Subchapter header */}
-              {subchapter !== '__none__' && (
-                <div className="ml-4 mb-4">
-                  <h3 className="font-semibold text-base border-b pb-1 mb-3">
-                    SUBCHAPTER {subchapter}. {sections[0]?.subchapterTitle || ''}
-                  </h3>
-                </div>
-              )}
-
-              {/* Sections */}
-              {sections.map(section => (
-                <div
-                  key={section.id}
-                  className={cn(
-                    'mb-6',
-                    subchapter !== '__none__' ? 'ml-8' : 'ml-4'
-                  )}
-                >
-                  {/* Section header */}
-                  <button
-                    className="font-medium text-sm mb-2 hover:text-primary cursor-pointer text-left"
-                    onClick={() => onSectionClick?.(section.sectionNum)}
-                  >
-                    Sec. {section.sectionNum}. {section.heading || ''}
-                  </button>
-
-                  {/* Section text with annotations support */}
-                  <div className="text-sm">
-                    <AnnotatableStatuteText
-                      content={section.text}
-                      statuteId={section.id}
-                      annotations={annotationsBySectionId[section.id] || []}
-                      hideRevisionHistory={hideRevisionHistory}
-                      onAnnotationCreate={session?.user ? (annotation) =>
-                        handleAnnotationCreate(section.sectionNum, section.id, annotation) : undefined}
-                      onAnnotationDelete={session?.user ? (annotationId) =>
-                        handleAnnotationDelete(section.id, annotationId) : undefined}
-                    />
+            {/* Sections grouped by subchapter */}
+            {Object.entries(sectionsBySubchapter).map(([subchapter, sections]) => (
+              <div
+                key={subchapter}
+                id={subchapter !== '__none__' ? `subchapter-${subchapter}` : undefined}
+                className={cn(
+                  'mb-6 transition-colors duration-1000 rounded-lg',
+                  subchapter !== '__none__' && (highlightedSubchapter === subchapter || focusedSubchapter === subchapter) && 'bg-primary/10 ring-2 ring-primary/30',
+                  subchapter !== '__none__' && '-mx-2 px-2 py-1'
+                )}
+              >
+                {/* Subchapter header */}
+                {subchapter !== '__none__' && (
+                  <div className="ml-4 mb-4">
+                    <h3 className="font-semibold text-base border-b pb-1 mb-3">
+                      SUBCHAPTER {subchapter}. {sections[0]?.subchapterTitle || ''}
+                    </h3>
                   </div>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
+                )}
+
+                {/* Sections */}
+                {sections.map(section => (
+                  <div
+                    key={section.id}
+                    className={cn(
+                      'mb-6',
+                      subchapter !== '__none__' ? 'ml-8' : 'ml-4'
+                    )}
+                  >
+                    {/* Section header */}
+                    <button
+                      className="font-medium text-sm mb-2 hover:text-primary cursor-pointer text-left"
+                      onClick={() => onSectionClick?.(section.sectionNum)}
+                    >
+                      Sec. {section.sectionNum}. {section.heading || ''}
+                    </button>
+
+                    {/* Section text with annotations support */}
+                    <div className="text-sm">
+                      <AnnotatableStatuteText
+                        content={section.text}
+                        statuteId={section.id}
+                        annotations={annotationsBySectionId[section.id] || []}
+                        hideRevisionHistory={hideRevisionHistory}
+                        onAnnotationCreate={session?.user ? (annotation) =>
+                          handleAnnotationCreate(section.sectionNum, section.id, annotation) : undefined}
+                        onAnnotationDelete={session?.user ? (annotationId) =>
+                          handleAnnotationDelete(section.id, annotationId) : undefined}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+
+        {/* Scrollbar markers overlay */}
+        {scrollbarMarkers.length > 0 && (
+          <StatuteScrollbarMarkers
+            markers={scrollbarMarkers}
+            contentHeight={scrollState.height}
+            viewportHeight={scrollState.viewportHeight}
+            scrollTop={scrollState.top}
+            onMarkerClick={(marker) => {
+              // Scroll to marker position
+              const position = marker.position * scrollState.height;
+              scrollAreaRef.current?.scrollTo({ top: position, behavior: 'smooth' });
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }

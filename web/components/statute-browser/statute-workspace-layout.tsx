@@ -95,6 +95,9 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
   const [selectedSubchapter, setSelectedSubchapter] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('section');
 
+  // Focused subchapter state (for chapter view context binding)
+  const [focusedSubchapter, setFocusedSubchapter] = useState<string | null>(null);
+
   // Data state
   const [code, setCode] = useState<CodeData | null>(null);
   const [statute, setStatute] = useState<StatuteData | null>(null);
@@ -177,7 +180,10 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
       if (viewMode === 'chapter' || viewMode === 'subchapter') {
         if (selectedChapter) params.set('chapter', selectedChapter);
       }
-      if (viewMode === 'subchapter' && selectedSubchapter) {
+      // Use focusedSubchapter in chapter view if set, otherwise use selectedSubchapter in subchapter view
+      if (viewMode === 'chapter' && focusedSubchapter) {
+        params.set('subchapter', focusedSubchapter);
+      } else if (viewMode === 'subchapter' && selectedSubchapter) {
         params.set('subchapter', selectedSubchapter);
       }
       if (viewMode === 'section' && selectedSection) {
@@ -198,7 +204,7 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
     };
 
     fetchCounts();
-  }, [selectedCode, selectedChapter, selectedSubchapter, selectedSection, viewMode, statute?.chapterNum]);
+  }, [selectedCode, selectedChapter, selectedSubchapter, selectedSection, viewMode, statute?.chapterNum, focusedSubchapter]);
 
   // Fetch annotations when statute changes
   useEffect(() => {
@@ -224,6 +230,18 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
     fetchAnnotations();
   }, [session?.user, selectedCode, selectedSection, viewMode]);
 
+  // Escape key handler to clear subchapter focus
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && focusedSubchapter && viewMode === 'chapter') {
+        e.preventDefault();
+        setFocusedSubchapter(null);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [focusedSubchapter, viewMode]);
+
   // Handle section selection
   const handleSelectSection = useCallback((codeAbbr: string, sectionNum: string) => {
     setSelectedCode(codeAbbr);
@@ -242,6 +260,7 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
     setSelectedSubchapter(null);
     setSelectedSection(null);
     setViewMode('chapter');
+    setFocusedSubchapter(null); // Clear focus when changing chapters
     setSearchMatches([]);
     setCurrentMatchIndex(0);
   }, []);
@@ -253,8 +272,19 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
     setSelectedSubchapter(subchapter);
     setSelectedSection(null);
     setViewMode('subchapter');
+    setFocusedSubchapter(null); // Clear focus when switching to subchapter view
     setSearchMatches([]);
     setCurrentMatchIndex(0);
+  }, []);
+
+  // Handle subchapter focus (for chapter view context binding)
+  const handleFocusSubchapter = useCallback((subchapter: string) => {
+    setFocusedSubchapter(subchapter);
+  }, []);
+
+  // Handle clear focus
+  const handleClearFocus = useCallback(() => {
+    setFocusedSubchapter(null);
   }, []);
 
   // Handle search
@@ -496,7 +526,10 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
                 codeAbbr={selectedCode}
                 chapterNum={selectedChapter}
                 hideRevisionHistory={hideRevisionHistory}
+                focusedSubchapter={focusedSubchapter}
                 onSectionClick={(sectionNum) => handleSelectSection(selectedCode, sectionNum)}
+                onSubchapterFocus={handleFocusSubchapter}
+                onClearFocus={handleClearFocus}
               />
             )}
 
@@ -777,9 +810,11 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
                           : statute?.chapterNum
                       }
                       subchapter={
-                        viewMode === 'subchapter'
-                          ? selectedSubchapter
-                          : statute?.subchapter
+                        viewMode === 'chapter' && focusedSubchapter
+                          ? focusedSubchapter
+                          : viewMode === 'subchapter'
+                            ? selectedSubchapter
+                            : statute?.subchapter
                       }
                       viewMode={viewMode}
                       onNavigateToNote={(codeAbbr, chapterNum, subchapter) => {
@@ -815,7 +850,13 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
                     <StatuteChatPanel
                       codeAbbr={selectedCode}
                       chapterNum={selectedChapter || ''}
-                      subchapter={viewMode === 'subchapter' ? selectedSubchapter : null}
+                      subchapter={
+                        viewMode === 'chapter' && focusedSubchapter
+                          ? focusedSubchapter
+                          : viewMode === 'subchapter'
+                            ? selectedSubchapter
+                            : null
+                      }
                       className="h-full"
                     />
                   )}

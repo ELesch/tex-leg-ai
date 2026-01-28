@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,6 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { BookOpen, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AnnotatableStatuteText, StatuteAnnotation } from './annotatable-statute-text';
+import {
+  StatuteScrollbarMarkers,
+  ScrollbarMarker,
+} from './statute-scrollbar-markers';
 
 interface SectionData {
   id: string;
@@ -47,12 +51,16 @@ export function SubchapterFullView({
   className,
 }: SubchapterFullViewProps) {
   const { data: session } = useSession();
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [subchapterData, setSubchapterData] = useState<SubchapterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Annotations state - keyed by section ID
   const [annotationsBySectionId, setAnnotationsBySectionId] = useState<Record<string, StatuteAnnotation[]>>({});
+
+  // Scroll state for scrollbar markers
+  const [scrollState, setScrollState] = useState({ top: 0, height: 0, viewportHeight: 0 });
 
   // Fetch subchapter data
   const fetchSubchapter = useCallback(async () => {
@@ -170,6 +178,43 @@ export function SubchapterFullView({
     }
   }, [session?.user]);
 
+  // Calculate scrollbar markers from annotations across all sections
+  const scrollbarMarkers: ScrollbarMarker[] = (() => {
+    if (!subchapterData?.sections) return [];
+
+    // Calculate total text length and section offsets
+    let totalLength = 0;
+    const sectionOffsets: { id: string; offset: number; length: number }[] = [];
+
+    for (const section of subchapterData.sections) {
+      sectionOffsets.push({
+        id: section.id,
+        offset: totalLength,
+        length: section.text.length,
+      });
+      totalLength += section.text.length;
+    }
+
+    if (totalLength === 0) return [];
+
+    // Calculate annotation markers with adjusted positions
+    const markers: ScrollbarMarker[] = [];
+    for (const { id, offset } of sectionOffsets) {
+      const sectionAnnotations = annotationsBySectionId[id] || [];
+      for (const annotation of sectionAnnotations) {
+        // Map annotation position within section to overall position
+        const overallPosition = (offset + annotation.startOffset) / totalLength;
+        markers.push({
+          position: overallPosition,
+          type: 'annotation',
+          id: annotation.id,
+        });
+      }
+    }
+
+    return markers;
+  })();
+
   if (isLoading) {
     return (
       <div className={cn('p-4 space-y-4', className)}>
@@ -255,47 +300,75 @@ export function SubchapterFullView({
       </div>
 
       {/* Structured subchapter content with indentation */}
-      <ScrollArea className="flex-1">
-        <div className="p-4">
-          {/* Subchapter header */}
-          <h2 className="text-lg font-bold mb-2">
-            CHAPTER {subchapterData.chapter}. {subchapterData.chapterTitle || ''}
-          </h2>
-          <h3 className="font-semibold text-base border-b pb-1 mb-4 ml-4">
-            SUBCHAPTER {subchapterData.subchapter}. {subchapterData.subchapterTitle || ''}
-          </h3>
+      <div className="flex-1 relative min-h-0 overflow-hidden">
+        <ScrollArea
+          className="h-full"
+          ref={scrollAreaRef}
+          onScrollCapture={(e) => {
+            const target = e.target as HTMLElement;
+            setScrollState({
+              top: target.scrollTop,
+              height: target.scrollHeight,
+              viewportHeight: target.clientHeight,
+            });
+          }}
+        >
+          <div className="p-4 pr-6">
+            {/* Subchapter header */}
+            <h2 className="text-lg font-bold mb-2">
+              CHAPTER {subchapterData.chapter}. {subchapterData.chapterTitle || ''}
+            </h2>
+            <h3 className="font-semibold text-base border-b pb-1 mb-4 ml-4">
+              SUBCHAPTER {subchapterData.subchapter}. {subchapterData.subchapterTitle || ''}
+            </h3>
 
-          {/* Sections */}
-          {subchapterData.sections.map(section => (
-            <div
-              key={section.id}
-              className="mb-6 ml-8"
-            >
-              {/* Section header */}
-              <button
-                className="font-medium text-sm mb-2 hover:text-primary cursor-pointer text-left"
-                onClick={() => onSectionClick?.(section.sectionNum)}
+            {/* Sections */}
+            {subchapterData.sections.map(section => (
+              <div
+                key={section.id}
+                className="mb-6 ml-8"
               >
-                Sec. {section.sectionNum}. {section.heading || ''}
-              </button>
+                {/* Section header */}
+                <button
+                  className="font-medium text-sm mb-2 hover:text-primary cursor-pointer text-left"
+                  onClick={() => onSectionClick?.(section.sectionNum)}
+                >
+                  Sec. {section.sectionNum}. {section.heading || ''}
+                </button>
 
-              {/* Section text with annotations support */}
-              <div className="text-sm">
-                <AnnotatableStatuteText
-                  content={section.text}
-                  statuteId={section.id}
-                  annotations={annotationsBySectionId[section.id] || []}
-                  hideRevisionHistory={hideRevisionHistory}
-                  onAnnotationCreate={session?.user ? (annotation) =>
-                    handleAnnotationCreate(section.sectionNum, section.id, annotation) : undefined}
-                  onAnnotationDelete={session?.user ? (annotationId) =>
-                    handleAnnotationDelete(section.id, annotationId) : undefined}
-                />
+                {/* Section text with annotations support */}
+                <div className="text-sm">
+                  <AnnotatableStatuteText
+                    content={section.text}
+                    statuteId={section.id}
+                    annotations={annotationsBySectionId[section.id] || []}
+                    hideRevisionHistory={hideRevisionHistory}
+                    onAnnotationCreate={session?.user ? (annotation) =>
+                      handleAnnotationCreate(section.sectionNum, section.id, annotation) : undefined}
+                    onAnnotationDelete={session?.user ? (annotationId) =>
+                      handleAnnotationDelete(section.id, annotationId) : undefined}
+                  />
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
+            ))}
+          </div>
+        </ScrollArea>
+
+        {/* Scrollbar markers overlay */}
+        {scrollbarMarkers.length > 0 && (
+          <StatuteScrollbarMarkers
+            markers={scrollbarMarkers}
+            contentHeight={scrollState.height}
+            viewportHeight={scrollState.viewportHeight}
+            scrollTop={scrollState.top}
+            onMarkerClick={(marker) => {
+              // Scroll to marker position
+              const position = marker.position * scrollState.height;
+              scrollAreaRef.current?.scrollTo({ top: position, behavior: 'smooth' });
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }
