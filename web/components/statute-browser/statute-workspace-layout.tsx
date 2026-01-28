@@ -111,6 +111,9 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [scrollState, setScrollState] = useState({ top: 0, height: 0, viewportHeight: 0 });
 
+  // Tab badge counts
+  const [tabCounts, setTabCounts] = useState({ bills: 0, notes: 0, chats: 0 });
+
   // Combined key for selection
   const selectionKey = selectedCode && selectedSection ? `${selectedCode}-${selectedSection}` : null;
 
@@ -148,6 +151,41 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
 
     fetchStatute();
   }, [selectedCode, selectedSection, viewMode]);
+
+  // Fetch tab counts when selection changes
+  useEffect(() => {
+    if (!selectedCode) {
+      setTabCounts({ bills: 0, notes: 0, chats: 0 });
+      return;
+    }
+
+    const fetchCounts = async () => {
+      const params = new URLSearchParams({ code: selectedCode });
+      if (viewMode === 'chapter' || viewMode === 'subchapter') {
+        if (selectedChapter) params.set('chapter', selectedChapter);
+      }
+      if (viewMode === 'subchapter' && selectedSubchapter) {
+        params.set('subchapter', selectedSubchapter);
+      }
+      if (viewMode === 'section' && selectedSection) {
+        params.set('section', selectedSection);
+        // Also get chapter from statute
+        if (statute?.chapterNum) params.set('chapter', statute.chapterNum);
+      }
+
+      try {
+        const response = await fetch(`/api/statutes/counts?${params.toString()}`);
+        if (response.ok) {
+          const data = await response.json();
+          setTabCounts(data);
+        }
+      } catch (error) {
+        console.error('Error fetching counts:', error);
+      }
+    };
+
+    fetchCounts();
+  }, [selectedCode, selectedChapter, selectedSubchapter, selectedSection, viewMode, statute?.chapterNum]);
 
   // Fetch annotations when statute changes
   useEffect(() => {
@@ -585,14 +623,29 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
                       <TabsTrigger value="markers" className="h-7 px-2">
                         <Flag className="h-4 w-4" />
                       </TabsTrigger>
-                      <TabsTrigger value="notes" className="h-7 px-2">
+                      <TabsTrigger value="notes" className="h-7 px-2 relative">
                         <StickyNote className="h-4 w-4" />
+                        {tabCounts.notes > 0 && (
+                          <Badge variant="secondary" className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] leading-none flex items-center justify-center">
+                            {tabCounts.notes}
+                          </Badge>
+                        )}
                       </TabsTrigger>
-                      <TabsTrigger value="bills" className="h-7 px-2">
+                      <TabsTrigger value="bills" className="h-7 px-2 relative">
                         <FileText className="h-4 w-4" />
+                        {tabCounts.bills > 0 && (
+                          <Badge variant="secondary" className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] leading-none flex items-center justify-center">
+                            {tabCounts.bills}
+                          </Badge>
+                        )}
                       </TabsTrigger>
-                      <TabsTrigger value="chat" className="h-7 px-2">
+                      <TabsTrigger value="chat" className="h-7 px-2 relative">
                         <MessageSquare className="h-4 w-4" />
+                        {tabCounts.chats > 0 && (
+                          <Badge variant="secondary" className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] leading-none flex items-center justify-center">
+                            {tabCounts.chats}
+                          </Badge>
+                        )}
                       </TabsTrigger>
                     </TabsList>
                   </Tabs>
