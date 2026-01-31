@@ -27,8 +27,8 @@ function StatuteBrowserFallback() {
 export default function StatuteBrowserPage() {
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="flex-shrink-0 p-6 pb-4">
+      {/* Header - hidden on mobile since the workspace has its own header */}
+      <div className="hidden flex-shrink-0 p-6 pb-4 md:block">
         <h1 className="flex items-center gap-2 text-3xl font-bold">
           <Scale className="h-8 w-8" />
           Statute Browser
@@ -39,9 +39,9 @@ export default function StatuteBrowserPage() {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 min-h-0 px-6 pb-6">
+      <div className="flex-1 min-h-0 md:px-6 md:pb-6">
         <Suspense fallback={<Skeleton className="h-full w-full" />}>
-          <StatuteWorkspaceLayout className="h-full border rounded-lg overflow-hidden" />
+          <StatuteWorkspaceLayout className="h-full md:border md:rounded-lg overflow-hidden" />
         </Suspense>
       </div>
     </div>

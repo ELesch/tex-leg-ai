@@ -218,20 +218,20 @@ function StatutesPageContent() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex-shrink-0 p-6 pb-4">
-        <h1 className="flex items-center gap-2 text-3xl font-bold">
-          <Scale className="h-8 w-8" />
+      <div className="flex-shrink-0 p-4 pb-2 md:p-6 md:pb-4">
+        <h1 className="flex items-center gap-2 text-2xl font-bold md:text-3xl">
+          <Scale className="h-6 w-6 md:h-8 md:w-8" />
           Texas Statutes
         </h1>
-        <p className="mt-1 text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground md:text-base">
           Browse Texas codes and see which bills affect each section
         </p>
       </div>
 
-      {/* Main content - 4 columns */}
-      <div className="flex min-h-0 flex-1 gap-3 px-6 pb-6">
+      {/* Main content - stacked on mobile, 4 columns on desktop */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-4 pb-4 md:flex-row md:overflow-hidden md:px-6 md:pb-6">
         {/* Column 1: Code List */}
-        <Card className="flex w-56 flex-col">
+        <Card className="flex min-h-[200px] flex-col md:min-h-0 md:w-56">
           <CardHeader className="flex-shrink-0 pb-2">
             <CardTitle className="text-sm font-medium">Texas Codes</CardTitle>
             <div className="relative mt-2">
@@ -283,7 +283,7 @@ function StatutesPageContent() {
         </Card>
 
         {/* Column 2: Chapters */}
-        <Card className="flex w-56 flex-col">
+        <Card className="flex min-h-[200px] flex-col md:min-h-0 md:w-56">
           <CardHeader className="flex-shrink-0 pb-2">
             <CardTitle className="text-sm font-medium">
               {selectedCode ? 'Chapters' : 'Select a Code'}
@@ -343,7 +343,7 @@ function StatutesPageContent() {
         </Card>
 
         {/* Column 3: Sections */}
-        <Card className="flex w-56 flex-col">
+        <Card className="flex min-h-[200px] flex-col md:min-h-0 md:w-56">
           <CardHeader className="flex-shrink-0 pb-2">
             <CardTitle className="text-sm font-medium">
               {selectedChapter ? 'Sections' : 'Select a Chapter'}
@@ -480,17 +480,17 @@ function StatutesPageContent() {
 function StatutesPageFallback() {
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-shrink-0 p-6 pb-4">
-        <h1 className="flex items-center gap-2 text-3xl font-bold">
-          <Scale className="h-8 w-8" />
+      <div className="flex-shrink-0 p-4 pb-2 md:p-6 md:pb-4">
+        <h1 className="flex items-center gap-2 text-2xl font-bold md:text-3xl">
+          <Scale className="h-6 w-6 md:h-8 md:w-8" />
           Texas Statutes
         </h1>
-        <p className="mt-1 text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground md:text-base">
           Browse Texas codes and see which bills affect each section
         </p>
       </div>
-      <div className="flex min-h-0 flex-1 gap-3 px-6 pb-6">
-        <Card className="flex w-56 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-4 pb-4 md:flex-row md:overflow-hidden md:px-6 md:pb-6">
+        <Card className="flex min-h-[200px] flex-col md:min-h-0 md:w-56">
           <CardHeader className="flex-shrink-0 pb-2">
             <CardTitle className="text-sm font-medium">Texas Codes</CardTitle>
           </CardHeader>
@@ -502,7 +502,7 @@ function StatutesPageFallback() {
             </div>
           </CardContent>
         </Card>
-        <Card className="flex w-56 flex-col">
+        <Card className="flex min-h-[200px] flex-col md:min-h-0 md:w-56">
           <CardHeader className="flex-shrink-0 pb-2">
             <CardTitle className="text-sm font-medium">Select a Code</CardTitle>
           </CardHeader>
@@ -510,7 +510,7 @@ function StatutesPageFallback() {
             <Skeleton className="h-32 w-full" />
           </CardContent>
         </Card>
-        <Card className="flex w-56 flex-col">
+        <Card className="flex min-h-[200px] flex-col md:min-h-0 md:w-56">
           <CardHeader className="flex-shrink-0 pb-2">
             <CardTitle className="text-sm font-medium">Select a Chapter</CardTitle>
           </CardHeader>
@@ -518,7 +518,7 @@ function StatutesPageFallback() {
             <Skeleton className="h-32 w-full" />
           </CardContent>
         </Card>
-        <Card className="flex flex-1 flex-col">
+        <Card className="flex min-h-[200px] flex-1 flex-col md:min-h-0">
           <CardHeader className="flex-shrink-0 pb-2">
             <CardTitle className="text-sm font-medium">Select a Section</CardTitle>
           </CardHeader>

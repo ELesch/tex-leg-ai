@@ -13,6 +13,13 @@ import {
   ResizableHandle,
 } from '@/components/ui/resizable';
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import {
   PanelRightClose,
   PanelRightOpen,
   PanelLeftClose,
@@ -29,6 +36,8 @@ import {
   ChevronRight,
   Calendar,
   FilePenLine,
+  Menu,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -122,6 +131,10 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
   const [sidebarTab, setSidebarTab] = useState<'search' | 'markers' | 'notes' | 'bills' | 'chat'>('search');
   const [hideRevisionHistory, setHideRevisionHistory] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false); // Hidden by default
+
+  // Mobile sheet state
+  const [isMobileTreeOpen, setIsMobileTreeOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Scroll state for scrollbar markers
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -439,9 +452,238 @@ export function StatuteWorkspaceLayout({ className }: StatuteWorkspaceLayoutProp
     setIsRightPanelOpen(size.asPercentage > 5);
   }, []);
 
+  // Shared tree component
+  const treeContent = (
+    <StatuteTree
+      onSelectSection={(code, section) => {
+        handleSelectSection(code, section);
+        setIsMobileTreeOpen(false);
+      }}
+      onSelectChapter={(code, chapter) => {
+        handleSelectChapter(code, chapter);
+        setIsMobileTreeOpen(false);
+      }}
+      onSelectSubchapter={(code, chapter, subchapter) => {
+        handleSelectSubchapter(code, chapter, subchapter);
+        setIsMobileTreeOpen(false);
+      }}
+      selectedSection={selectionKey}
+    />
+  );
+
   return (
     <div className={cn('h-full w-full overflow-hidden', className)}>
-      <ResizablePanelGroup orientation="horizontal" className="h-full">
+      {/* Mobile Layout */}
+      <div className="flex h-full flex-col md:hidden">
+        {/* Mobile header with menu buttons */}
+        <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-2">
+          <Sheet open={isMobileTreeOpen} onOpenChange={setIsMobileTreeOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="sm" className="gap-2">
+                <Menu className="h-4 w-4" />
+                <span className="text-sm">Browse</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[85vw] max-w-[320px] p-0">
+              <SheetHeader className="border-b px-4 py-3">
+                <SheetTitle className="text-left">Statutes</SheetTitle>
+              </SheetHeader>
+              <div className="h-[calc(100vh-57px)] overflow-hidden">
+                {treeContent}
+              </div>
+            </SheetContent>
+          </Sheet>
+
+          <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="sm" className="gap-2">
+                <span className="text-sm">Tools</span>
+                <Search className="h-4 w-4" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-[85vw] max-w-[320px] p-0">
+              <SheetHeader className="border-b px-4 py-3">
+                <SheetTitle className="flex items-center justify-between">
+                  <span>Tools</span>
+                  <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as typeof sidebarTab)}>
+                    <TabsList className="h-8">
+                      <TabsTrigger value="search" className="h-7 px-2">
+                        <Search className="h-4 w-4" />
+                      </TabsTrigger>
+                      <TabsTrigger value="bills" className="h-7 px-2 relative">
+                        <FileText className="h-4 w-4" />
+                        {tabCounts.bills > 0 && (
+                          <Badge variant="secondary" className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px]">
+                            {tabCounts.bills}
+                          </Badge>
+                        )}
+                      </TabsTrigger>
+                      <TabsTrigger value="chat" className="h-7 px-2">
+                        <MessageSquare className="h-4 w-4" />
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </SheetTitle>
+              </SheetHeader>
+              <div className="h-[calc(100vh-57px)] overflow-auto">
+                {sidebarTab === 'search' && (
+                  <div className="flex flex-col h-full">
+                    <div className="p-3 border-b">
+                      <StatuteSearchBar
+                        codeAbbr={selectedCode || undefined}
+                        chapterNum={selectedChapter || undefined}
+                        onSearch={handleSearch}
+                        onClear={handleClearSearch}
+                        isSearching={isSearching}
+                        resultCount={searchMatches.length || searchResults.length}
+                        currentMatchIndex={currentMatchIndex}
+                        onNavigateMatch={handleNavigateMatch}
+                      />
+                    </div>
+                    <div className="flex-1 min-h-0 overflow-auto">
+                      {searchResults.length > 0 && (
+                        <StatuteSearchResults
+                          results={searchResults}
+                          query={searchQuery}
+                          isSemanticSearch={isSemanticSearch}
+                          onResultClick={(result) => {
+                            handleSearchResultClick(result);
+                            setIsMobileSidebarOpen(false);
+                          }}
+                          selectedResultId={statute?.id}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
+                {sidebarTab === 'bills' && selectedCode && (
+                  <div className="p-3">
+                    <AffectingBillPane
+                      codeAbbr={selectedCode}
+                      sectionNum={viewMode === 'section' ? selectedSection || undefined : undefined}
+                      chapterNum={
+                        viewMode === 'chapter' || viewMode === 'subchapter'
+                          ? selectedChapter || undefined
+                          : statute?.chapterNum
+                      }
+                      subchapter={viewMode === 'subchapter' ? selectedSubchapter || undefined : undefined}
+                    />
+                  </div>
+                )}
+                {sidebarTab === 'chat' && selectedCode && (viewMode === 'chapter' || viewMode === 'subchapter') && (
+                  <StatuteChatPanel
+                    codeAbbr={selectedCode}
+                    chapterNum={selectedChapter || ''}
+                    subchapter={
+                      viewMode === 'chapter' && focusedSubchapter
+                        ? focusedSubchapter
+                        : viewMode === 'subchapter'
+                          ? selectedSubchapter
+                          : null
+                    }
+                    className="h-full"
+                  />
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+
+        {/* Mobile main content */}
+        <div className="flex-1 min-h-0 overflow-auto">
+          {/* Empty state */}
+          {!selectedCode && !selectedSection && !selectedChapter && !selectedSubchapter && (
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
+              <Scale className="h-12 w-12 mb-4 opacity-50" />
+              <p className="text-base font-medium">Select a statute section</p>
+              <p className="text-sm text-center">Tap "Browse" to explore the statute tree</p>
+            </div>
+          )}
+
+          {/* Loading state */}
+          {isLoading && viewMode === 'section' && (
+            <div className="p-4 space-y-4">
+              <Skeleton className="h-8 w-1/2" />
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-64 w-full" />
+            </div>
+          )}
+
+          {/* Error state */}
+          {error && (
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
+              <FileText className="h-12 w-12 mb-4 opacity-50" />
+              <p className="text-base font-medium">{error}</p>
+              <p className="text-sm">Try selecting a different section</p>
+            </div>
+          )}
+
+          {/* Chapter view */}
+          {viewMode === 'chapter' && selectedCode && selectedChapter && (
+            <ChapterFullView
+              codeAbbr={selectedCode}
+              chapterNum={selectedChapter}
+              hideRevisionHistory={hideRevisionHistory}
+              focusedSubchapter={focusedSubchapter}
+              onSectionClick={(sectionNum) => handleSelectSection(selectedCode, sectionNum)}
+              onSubchapterFocus={handleFocusSubchapter}
+              onClearFocus={handleClearFocus}
+            />
+          )}
+
+          {/* Subchapter view */}
+          {viewMode === 'subchapter' && selectedCode && selectedChapter && selectedSubchapter && (
+            <SubchapterFullView
+              codeAbbr={selectedCode}
+              chapterNum={selectedChapter}
+              subchapter={selectedSubchapter}
+              hideRevisionHistory={hideRevisionHistory}
+              onSectionClick={(sectionNum) => handleSelectSection(selectedCode, sectionNum)}
+            />
+          )}
+
+          {/* Section view */}
+          {viewMode === 'section' && statute && code && !isLoading && !error && (
+            <div className="flex flex-col h-full">
+              {/* Header */}
+              <div className="flex-shrink-0 p-3 border-b bg-muted/30">
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge variant="outline" className="text-xs">
+                    {code.abbreviation}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    Ch. {statute.chapterNum}
+                    {statute.subchapter && `, Subch. ${statute.subchapter}`}
+                  </span>
+                </div>
+                <h1 className="text-lg font-bold">§ {statute.sectionNum}</h1>
+                {statute.heading && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {statute.heading}
+                  </p>
+                )}
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 p-3 overflow-auto">
+                <AnnotatableStatuteText
+                  content={statute.text}
+                  statuteId={statute.id}
+                  annotations={annotations}
+                  searchMatches={searchMatches}
+                  hideRevisionHistory={hideRevisionHistory}
+                  onAnnotationCreate={session?.user ? handleAnnotationCreate : undefined}
+                  onAnnotationDelete={session?.user ? handleAnnotationDelete : undefined}
+                  onMatchClick={(index) => setCurrentMatchIndex(index)}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Desktop Layout */}
+      <ResizablePanelGroup orientation="horizontal" className="hidden h-full md:flex">
         {/* Left panel - Tree */}
         <ResizablePanel
           id="left-panel"
