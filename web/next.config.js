@@ -3,6 +3,12 @@ const nextConfig = {
   // Enable React strict mode for better development experience
   reactStrictMode: true,
 
+  // Ignore ESLint warnings during production build
+  // (warnings are still checked in development and CI linting)
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   // Configure external packages that should be transpiled
   transpilePackages: [],
 
