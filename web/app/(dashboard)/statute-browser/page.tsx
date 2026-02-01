@@ -40,7 +40,7 @@ export default function StatuteBrowserPage() {
 
       {/* Main content */}
       <div className="flex-1 min-h-0 md:px-6 md:pb-6">
-        <Suspense fallback={<Skeleton className="h-full w-full" />}>
+        <Suspense fallback={<StatuteBrowserFallback />}>
           <StatuteWorkspaceLayout className="h-full md:border md:rounded-lg overflow-hidden" />
         </Suspense>
       </div>
